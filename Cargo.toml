@@ -1,6 +1,9 @@
 [workspace]
 members = ["common", "server"]
 
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+
 [profile.final]
 inherits = "release"
 strip = true
