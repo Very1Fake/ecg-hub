@@ -1,0 +1,8 @@
+[workspace]
+members = ["common", "server"]
+
+[profile.final]
+inherits = "release"
+strip = true
+lto = true
+codegen-units = 1
