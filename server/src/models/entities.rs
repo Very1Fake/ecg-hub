@@ -3,8 +3,8 @@ use common::user::{UserData, UserStatus};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Deserialize, Serialize, Debug)]
-pub struct User {
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct UserEntity {
     pub uuid: Uuid,
     pub username: String,
     pub email: String,
@@ -14,8 +14,8 @@ pub struct User {
     pub created: DateTime<Utc>,
 }
 
-impl From<User> for UserData {
-    fn from(user: User) -> Self {
+impl From<UserEntity> for UserData {
+    fn from(user: UserEntity) -> Self {
         Self {
             uuid: user.uuid,
             username: user.username,
