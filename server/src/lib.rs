@@ -7,7 +7,7 @@ use axum::{routing::get, Json, Router, Server};
 use tracing::info;
 
 use common::hub::HubStatus;
-use config::{STATUS, Config};
+use config::{Config, STATUS};
 use error::Error;
 
 /// ECG Hub entrypoint

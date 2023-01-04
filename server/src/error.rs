@@ -1,4 +1,4 @@
-use std::{net::AddrParseError, io};
+use std::{io, net::AddrParseError};
 
 macro_rules! impl_from_error {
     ($from: ty, $to: expr) => {
@@ -12,6 +12,7 @@ macro_rules! impl_from_error {
 
 #[derive(Debug)]
 pub enum Error {
+    ConfigError(String),
     HyperError(hyper::Error),
     EnvyError(envy::Error),
     IOError(io::Error),
