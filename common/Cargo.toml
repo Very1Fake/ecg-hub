@@ -7,6 +7,13 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+"sqlx" = ["dep:sqlx"]
+
 [dependencies]
 serde.workspace = true
 uuid.workspace = true
+
+sqlx = { version = "0.6", features = ["postgres"], optional = true}
+
+serde_repr = "0.1"

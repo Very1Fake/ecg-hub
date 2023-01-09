@@ -1,8 +1,4 @@
-use ecg_hub_server::{
-    app::{start, HubState},
-    config::Config,
-    error::Error,
-};
+use ecg_hub_server::{config::Config, error::Error, run};
 use tokio::runtime::Builder;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -19,9 +15,10 @@ fn main() -> Result<(), Error> {
     // Run the server
     Builder::new_current_thread()
         .enable_io()
+        .enable_time()
         .build()
         .unwrap()
-        .block_on(start(config, HubState::new().build_router()))?;
+        .block_on(run(&config))?;
 
     Ok(())
 }

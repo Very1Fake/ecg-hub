@@ -23,6 +23,13 @@ pub struct Config {
     pub port: u16,
     #[serde(deserialize_with = "Config::log_level_deserialize")]
     pub log_level: LevelFilter,
+    pub db_addr: String,
+    pub db_port: u16,
+    pub db_user: String,
+    pub db_pass: String,
+    pub db_name: String,
+    pub db_pool_min: u32,
+    pub db_pool_max: u32,
 }
 
 impl Config {
@@ -44,6 +51,13 @@ impl Config {
 
         filter
     }
+
+    pub fn db_uri(&self) -> String {
+        format!(
+            "postgres://{}:{}@{}:{}/{}",
+            self.db_user, self.db_pass, self.db_addr, self.db_port, self.db_name
+        )
+    }
 }
 
 impl Default for Config {
@@ -58,6 +72,13 @@ impl Default for Config {
             log_level: LevelFilter::DEBUG,
             #[cfg(not(debug_assertions))]
             log_level: LevelFilter::INFO,
+            db_addr: String::from("localhost"),
+            db_port: 5432,
+            db_user: String::from("root"),
+            db_pass: String::from("pass"),
+            db_name: String::from("ecg"),
+            db_pool_min: 1,
+            db_pool_max: 8,
         }
     }
 }
