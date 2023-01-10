@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use axum::{routing::get, Router};
+use axum::{routing::{get, post}, Router};
 use sqlx::postgres::PgPoolOptions;
 
 use crate::{
@@ -33,7 +33,7 @@ impl HubState {
         Router::new()
             .route("/status", get(info))
             .route("/user", get(user_get).post(user_post))
-            .route("/auth/login", get(auth_login))
+            .route("/auth/login", post(auth_login))
             .route("/token/refresh", get(token_refresh))
             .route("/token/revoke", get(token_revoke))
             .route("/token/revoke_all", get(token_revoke_all))

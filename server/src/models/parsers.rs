@@ -1,3 +1,4 @@
+use common::user::ClientType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
@@ -14,6 +15,16 @@ pub struct RegisterForm {
     pub username: String,
     #[validate(email)]
     pub email: String,
-    #[validate(length(min = 6))]
+    #[validate(length(min = 6, max = 64))]
     pub password: String,
+}
+
+#[derive(Validate, Deserialize, Serialize, Debug)]
+pub struct LoginForm {
+    #[validate(length(min = 3, max = 24))]
+    pub username: String,
+    #[validate(length(min = 6, max = 64))]
+    pub password: String,
+    #[serde(default)]
+    pub ct: ClientType,
 }

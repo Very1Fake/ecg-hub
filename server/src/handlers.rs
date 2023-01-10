@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
-    Json,
+    Form, Json,
 };
 use hyper::StatusCode;
 
@@ -13,7 +13,6 @@ use common::{
     user::{UserData, UserStatus},
 };
 use rand_core::OsRng;
-use serde_json::json;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
 use tracing::error;
 use validator::Validate;
@@ -23,13 +22,15 @@ use crate::{
     config::STATUS,
     models::{
         entities::User,
-        parsers::{RegisterForm, UserIdQuery},
+        parsers::{LoginForm, RegisterForm, UserIdQuery},
     },
 };
 
 pub async fn info() -> Json<HubStatus<'static>> {
     Json(STATUS)
 }
+
+// User
 
 pub async fn user_get(
     State(state): State<Arc<HubState>>,
@@ -38,14 +39,20 @@ pub async fn user_get(
     Ok(Json(
         match (user_id.uuid, &user_id.username) {
             (Some(uuid), _) => {
-                if let Some(user) = User::find_by_uuid(&state.db, uuid).await.unwrap() {
+                if let Some(user) = User::find_by_uuid(&state.db, uuid)
+                    .await
+                    .expect("failed to retrieve user data from db")
+                {
                     user
                 } else {
                     return Err(StatusCode::NOT_FOUND);
                 }
             }
             (None, Some(username)) => {
-                if let Some(user) = User::find_by_username(&state.db, username).await.unwrap() {
+                if let Some(user) = User::find_by_username(&state.db, username)
+                    .await
+                    .expect("failed to retrieve user data from db")
+                {
                     user
                 } else {
                     return Err(StatusCode::NOT_FOUND);
@@ -86,17 +93,15 @@ pub async fn user_post(
             {
                 (
                     StatusCode::CONFLICT,
-                    Json(json!({
-                        "err": true,
-                        "msg": match err.downcast::<PgDatabaseError>()
-                            .constraint()
-                            .expect("db error without constraint")
-                        {
-                            "User_username_key" => format!("username '{username}' already taken"),
-                            "User_email_key" => format!("email '{email}' already taken"),
-                            _ => String::from("db error"),
-                        }
-                    })),
+                    match err
+                        .downcast::<PgDatabaseError>()
+                        .constraint()
+                        .expect("db error without constraint")
+                    {
+                        "User_username_key" => format!("username '{username}' already taken"),
+                        "User_email_key" => format!("email '{email}' already taken"),
+                        _ => String::from("db error"),
+                    },
                 )
                     .into_response()
             }
@@ -111,8 +116,38 @@ pub async fn user_post(
     }
 }
 
-pub async fn auth_login() -> StatusCode {
-    StatusCode::NOT_IMPLEMENTED
+// Security
+
+pub async fn auth_login(
+    State(state): State<Arc<HubState>>,
+    Form(form): Form<LoginForm>,
+) -> impl IntoResponse {
+    if form.validate().is_ok() {
+        let LoginForm {
+            username, password, ..
+        } = form;
+
+        if let Some(user) = User::find_by_username(&state.db, &username)
+            .await
+            .expect("failed to retrieve user data from db")
+        {
+            if Argon2::default()
+                .verify_password(
+                    password.as_bytes(),
+                    &PasswordHash::new(&user.password).expect("failed to parse password hash"),
+                )
+                .is_ok()
+            {
+                StatusCode::OK
+            } else {
+                StatusCode::UNAUTHORIZED
+            }
+        } else {
+            StatusCode::NOT_FOUND
+        }
+    } else {
+        StatusCode::BAD_REQUEST
+    }
 }
 
 pub async fn token_refresh() -> StatusCode {
