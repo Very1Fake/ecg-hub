@@ -3,9 +3,9 @@ use std::sync::Arc;
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use axum::{
     extract::{Query, State},
+    response::IntoResponse,
     Json,
 };
-use chrono::Utc;
 use hyper::StatusCode;
 
 use common::{
@@ -13,13 +13,14 @@ use common::{
     user::{UserData, UserStatus},
 };
 use rand_core::OsRng;
-use sqlx::types::Uuid;
+use serde_json::json;
+use sqlx::{postgres::PgDatabaseError, types::Uuid};
+use tracing::error;
 use validator::Validate;
 
 use crate::{
     app::HubState,
     config::STATUS,
-    error::Error,
     models::{
         entities::User,
         parsers::{RegisterForm, UserIdQuery},
@@ -59,26 +60,53 @@ pub async fn user_get(
 pub async fn user_post(
     State(state): State<Arc<HubState>>,
     Json(form): Json<RegisterForm>,
-) -> Result<StatusCode, Error> {
+) -> impl IntoResponse {
     if form.validate().is_ok() {
-        User {
-            uuid: Uuid::new_v4(),
-            username: form.username,
-            email: form.email.into(),
-            password: Argon2::default()
-                .hash_password(form.password.as_bytes(), &SaltString::generate(&mut OsRng))
+        let RegisterForm {
+            username,
+            email,
+            password,
+        } = form;
+
+        match User::new(
+            Uuid::new_v4(),
+            username.clone(),
+            email.clone(),
+            Argon2::default()
+                .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
                 .expect("password hashing failed")
                 .to_string(),
-            other: sqlx::types::Json::default(),
-            status: UserStatus::Active,
-            updated: Utc::now(),
-            created: Utc::now(),
-        }
+            UserStatus::Active,
+        )
         .insert(&state.db)
-        .await?;
-
-        Ok(StatusCode::CREATED)
+        .await
+        {
+            Err(sqlx::Error::Database(err))
+                if err.try_downcast_ref::<PgDatabaseError>().is_some() =>
+            {
+                (
+                    StatusCode::CONFLICT,
+                    Json(json!({
+                        "err": true,
+                        "msg": match err.downcast::<PgDatabaseError>()
+                            .constraint()
+                            .expect("db error without constraint")
+                        {
+                            "User_username_key" => format!("username '{username}' already taken"),
+                            "User_email_key" => format!("email '{email}' already taken"),
+                            _ => String::from("db error"),
+                        }
+                    })),
+                )
+                    .into_response()
+            }
+            Err(err) => {
+                error!(?err);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+            _ => StatusCode::CREATED.into_response(),
+        }
     } else {
-        Ok(StatusCode::BAD_REQUEST)
+        StatusCode::BAD_REQUEST.into_response()
     }
 }

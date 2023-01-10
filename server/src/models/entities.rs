@@ -34,6 +34,25 @@ pub struct User {
 }
 
 impl User {
+    pub fn new(
+        uuid: Uuid,
+        username: String,
+        email: String,
+        password: String,
+        status: UserStatus,
+    ) -> Self {
+        Self {
+            uuid,
+            username,
+            email: CiText(email),
+            password,
+            other: Json::default(),
+            status,
+            updated: Utc::now(),
+            created: Utc::now(),
+        }
+    }
+
     pub async fn find_by_username(db: &DB, username: &str) -> Result<Option<Self>, Error> {
         sqlx::query_as(r#"SELECT * FROM "User" WHERE username = $1"#)
             .bind(username)
