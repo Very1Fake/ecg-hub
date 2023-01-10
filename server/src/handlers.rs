@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use axum::{
     extract::{Query, State},
     Json,
@@ -11,6 +12,7 @@ use common::{
     hub::HubStatus,
     user::{UserData, UserStatus},
 };
+use rand_core::OsRng;
 use sqlx::types::Uuid;
 use validator::Validate;
 
@@ -63,7 +65,11 @@ pub async fn user_post(
             uuid: Uuid::new_v4(),
             username: form.username,
             email: form.email.into(),
-            password: form.password,
+            password: Argon2::default()
+                .hash_password(form.password.as_bytes(), &SaltString::generate(&mut OsRng))
+                .expect("password hashing failed")
+                .to_string(),
+            other: sqlx::types::Json::default(),
             status: UserStatus::Active,
             updated: Utc::now(),
             created: Utc::now(),
