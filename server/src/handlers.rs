@@ -110,3 +110,19 @@ pub async fn user_post(
         StatusCode::BAD_REQUEST.into_response()
     }
 }
+
+pub async fn auth_login() -> StatusCode {
+    StatusCode::NOT_IMPLEMENTED
+}
+
+pub async fn token_refresh() -> StatusCode {
+    StatusCode::NOT_IMPLEMENTED
+}
+
+pub async fn token_revoke() -> StatusCode {
+    StatusCode::NOT_IMPLEMENTED
+}
+
+pub async fn token_revoke_all() -> StatusCode {
+    StatusCode::NOT_IMPLEMENTED
+}

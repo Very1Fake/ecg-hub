@@ -6,7 +6,9 @@ use sqlx::postgres::PgPoolOptions;
 use crate::{
     config::Config,
     error::Error,
-    handlers::{info, user_get, user_post},
+    handlers::{
+        auth_login, info, token_refresh, token_revoke, token_revoke_all, user_get, user_post,
+    },
     DB,
 };
 
@@ -31,6 +33,10 @@ impl HubState {
         Router::new()
             .route("/status", get(info))
             .route("/user", get(user_get).post(user_post))
+            .route("/auth/login", get(auth_login))
+            .route("/token/refresh", get(token_refresh))
+            .route("/token/revoke", get(token_revoke))
+            .route("/token/revoke_all", get(token_revoke_all))
             .with_state(Arc::new(self))
     }
 }
