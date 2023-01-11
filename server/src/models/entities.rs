@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use common::user::{UserData, UserStatus};
+use common::user::{ClientType, UserData, UserStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{
@@ -87,5 +87,34 @@ impl From<User> for UserData {
             username: user.username,
             status: user.status,
         }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Session
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Represents user session
+#[derive(FromRow, Clone, Copy, Debug)]
+pub struct Session {
+    pub user: Uuid,
+    pub uuid: Uuid,
+    pub expires: DateTime<Utc>,
+}
+
+impl Session {
+    pub async fn insert(&self, db: &DB, client_type: ClientType) -> Result<Self, Error> {
+        sqlx::query_as(match client_type {
+            ClientType::Web => r#"INSERT INTO "WebSession" VALUES ($1, $2, $3) RETURNING *;"#,
+            ClientType::Game => r#"
+            INSERT INTO "GameSession" VALUES ($1, $2, $3) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, expires = excluded.expires RETURNING *;"#,
+            ClientType::Mobile => r#"
+            INSERT INTO "MobileSession" VALUES ($1, $2, $3) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, expires = excluded.expires RETURNING *;"#,
+        })
+            .bind(self.user)
+            .bind(self.uuid)
+            .bind(self.expires)
+            .fetch_one(db)
+            .await
     }
 }
