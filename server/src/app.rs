@@ -1,19 +1,26 @@
 use std::{sync::Arc, time::Duration};
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
+use ed25519_dalek::Keypair;
+use rand_7::rngs::OsRng;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::{
     config::Config,
     error::Error,
     handlers::{
-        auth_login, info, token_refresh, token_revoke, token_revoke_all, user_get, user_post,
+        auth_login, info, pubkey, token_refresh, token_revoke, token_revoke_all, user_get,
+        user_post,
     },
     DB,
 };
 
 #[derive(Debug)]
 pub struct HubState {
+    pub key: Keypair,
     pub db: DB,
 }
 
@@ -26,13 +33,19 @@ impl HubState {
             .connect(&config.db_uri())
             .await?;
 
-        Ok(Self { db })
+        let mut rng = OsRng {};
+
+        Ok(Self {
+            key: Keypair::generate(&mut rng),
+            db,
+        })
     }
 
     pub fn build_router(self) -> Router {
         Router::new()
             .route("/status", get(info))
             .route("/user", get(user_get).post(user_post))
+            .route("/pubkey", get(pubkey))
             .route("/auth/login", post(auth_login))
             .route("/token/refresh", get(token_refresh))
             .route("/token/revoke", get(token_revoke))

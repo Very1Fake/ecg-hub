@@ -13,9 +13,12 @@ common = { package = "ecg-hub-common", features = ["sqlx"], path = "../common" }
 serde.workspace = true
 uuid.workspace = true
 
-argon2 = "0.4"
-rand_core = { version = "0.6", features = ["std"] }
 axum = { version = "0.6", features = ["http2"] }
+argon2 = "0.4"
+ed25519-dalek = "1.0"
+hex = "0.4"
+rand_8 = { package = "rand", version = "0.8", features = ["std"] }
+rand_7 = { package = "rand", version = "0.7", features = ["std"] }
 chrono = { version = "0.4", features = ["serde"] }
 envy = "0.4"
 hyper = { version = "0.14" }

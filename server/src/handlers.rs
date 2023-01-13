@@ -7,15 +7,15 @@ use axum::{
     Form, Json,
 };
 use hyper::StatusCode;
+use rand_8::rngs::OsRng;
+use sqlx::{postgres::PgDatabaseError, types::Uuid};
+use tracing::error;
+use validator::Validate;
 
 use common::{
     hub::HubStatus,
     user::{UserData, UserStatus},
 };
-use rand_core::OsRng;
-use sqlx::{postgres::PgDatabaseError, types::Uuid};
-use tracing::error;
-use validator::Validate;
 
 use crate::{
     app::HubState,
@@ -28,6 +28,10 @@ use crate::{
 
 pub async fn info() -> Json<HubStatus<'static>> {
     Json(STATUS)
+}
+
+pub async fn pubkey(State(state): State<Arc<HubState>>) -> String {
+    hex::encode(state.key.public.as_bytes())
 }
 
 // User
