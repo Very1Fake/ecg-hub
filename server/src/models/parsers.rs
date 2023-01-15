@@ -1,7 +1,13 @@
 use common::user::ClientType;
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
+
+lazy_static! {
+    pub static ref USERNAME_REGEX: Regex = Regex::new("^[a-zA-Z0-9_]{3,24}$").unwrap();
+}
 
 #[derive(Deserialize, Debug)]
 pub struct UserIdQuery {
@@ -11,7 +17,7 @@ pub struct UserIdQuery {
 
 #[derive(Validate, Deserialize, Serialize, Debug)]
 pub struct RegisterForm {
-    #[validate(length(min = 3, max = 24))]
+    #[validate(regex = "USERNAME_REGEX")]
     pub username: String,
     #[validate(email)]
     pub email: String,
@@ -21,7 +27,7 @@ pub struct RegisterForm {
 
 #[derive(Validate, Deserialize, Serialize, Debug)]
 pub struct LoginForm {
-    #[validate(length(min = 3, max = 24))]
+    #[validate(regex = "USERNAME_REGEX")]
     pub username: String,
     #[validate(length(min = 6, max = 64))]
     pub password: String,
