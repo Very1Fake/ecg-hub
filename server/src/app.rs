@@ -4,8 +4,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use ed25519_dalek::Keypair;
-use rand_7::rngs::OsRng;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::{
@@ -15,12 +13,13 @@ use crate::{
         auth_login, info, pubkey, token_refresh, token_revoke, token_revoke_all, user_get,
         user_post,
     },
+    keys::Keys,
     DB,
 };
 
 #[derive(Debug)]
 pub struct HubState {
-    pub key: Keypair,
+    pub keys: Keys,
     pub db: DB,
 }
 
@@ -33,10 +32,8 @@ impl HubState {
             .connect(&config.db_uri())
             .await?;
 
-        let mut rng = OsRng {};
-
         Ok(Self {
-            key: Keypair::generate(&mut rng),
+            keys: config.keys(),
             db,
         })
     }

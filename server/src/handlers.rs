@@ -31,7 +31,7 @@ pub async fn info() -> Json<HubStatus<'static>> {
 }
 
 pub async fn pubkey(State(state): State<Arc<HubState>>) -> String {
-    hex::encode(state.key.public.as_bytes())
+    state.keys.public_hex.clone()
 }
 
 // User
