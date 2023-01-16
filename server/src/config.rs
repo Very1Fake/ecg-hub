@@ -83,15 +83,15 @@ impl Config {
 
     pub fn keys(&self) -> Keys {
         let keys = if let Some(private_key_bytes) = self.private_key {
-            Keys::from(&private_key_bytes)
+            Keys::from(private_key_bytes)
         } else {
             Keys::rand()
         };
 
         if self.log_verbose {
             warn!(
-                public = keys.public_hex,
-                private = keys.private.as_bytes().encode_hex::<String>(),
+                public = keys.pair.pk.as_slice().encode_hex::<String>(),
+                seed = keys.pair.sk.seed().as_slice().encode_hex::<String>(),
                 "New keypair"
             );
         }

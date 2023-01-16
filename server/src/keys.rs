@@ -1,32 +1,32 @@
-use ed25519_dalek::{PublicKey, SecretKey};
+use ed25519_compact::{KeyPair, Seed};
 use hex::ToHex;
-use rand_7::rngs::OsRng;
 
-#[derive(Debug)]
 pub struct Keys {
-    pub private: SecretKey,
-    pub public: PublicKey,
+    pub pair: KeyPair,
+
+    // Cached values
     pub public_hex: String,
+    pub public_pem: String,
 }
 
 impl Keys {
-    pub fn new(private: SecretKey) -> Self {
-        let public = PublicKey::from(&private);
+    pub fn new(pair: KeyPair) -> Self {
+        let public_pem = pair.pk.to_pem();
 
         Self {
-            private,
-            public,
-            public_hex: public.as_bytes().encode_hex(),
+            public_hex: pair.pk.as_slice().encode_hex(),
+            pair,
+            public_pem,
         }
     }
 
     pub fn rand() -> Self {
-        Self::new(SecretKey::generate(&mut OsRng {}))
+        Self::new(KeyPair::generate())
     }
 }
 
-impl From<&[u8; 32]> for Keys {
-    fn from(bytes: &[u8; 32]) -> Self {
-        Self::new(SecretKey::from_bytes(bytes).expect("Failed to parse private key from bytes"))
+impl From<[u8; 32]> for Keys {
+    fn from(bytes: [u8; 32]) -> Self {
+        Self::new(KeyPair::from_seed(Seed::new(bytes)))
     }
 }

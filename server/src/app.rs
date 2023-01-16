@@ -17,7 +17,6 @@ use crate::{
     DB,
 };
 
-#[derive(Debug)]
 pub struct HubState {
     pub keys: Keys,
     pub db: DB,

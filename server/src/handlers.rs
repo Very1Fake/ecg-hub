@@ -7,7 +7,7 @@ use axum::{
     Form, Json,
 };
 use hyper::StatusCode;
-use rand_8::rngs::OsRng;
+use rand::rngs::OsRng;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
 use tracing::error;
 use validator::Validate;

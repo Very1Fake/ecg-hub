@@ -9,6 +9,20 @@ lazy_static! {
     pub static ref USERNAME_REGEX: Regex = Regex::new("^[a-zA-Z0-9_]{3,24}$").unwrap();
 }
 
+#[derive(Deserialize, Default, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum KeyFormat {
+    #[default]
+    Hex,
+    Pem,
+}
+
+#[derive(Deserialize, Default, Debug)]
+#[serde(default)]
+pub struct KeyFormatQuery {
+    pub format: KeyFormat,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct UserIdQuery {
     pub uuid: Option<Uuid>,
