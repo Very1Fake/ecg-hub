@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use chrono::TimeZone;
 use common::user::{ClientType, UserData, UserStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,6 +14,8 @@ use sqlx::{
 };
 
 use crate::{types::CiText, DB};
+
+use super::claims::{RefreshTokenClaims, SecurityToken};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // User
@@ -97,24 +100,104 @@ impl From<User> for UserData {
 /// Represents user session
 #[derive(FromRow, Clone, Copy, Debug)]
 pub struct Session {
-    pub user: Uuid,
+    /// User UUID
+    pub sub: Uuid,
+    /// Session UUID
     pub uuid: Uuid,
-    pub expires: DateTime<Utc>,
+    /// Expire timestamp
+    pub exp: DateTime<Utc>,
 }
 
 impl Session {
-    pub async fn insert(&self, db: &DB, client_type: ClientType) -> Result<Self, Error> {
-        sqlx::query_as(match client_type {
-            ClientType::Web => r#"INSERT INTO "WebSession" VALUES ($1, $2, $3) RETURNING *;"#,
-            ClientType::Game => r#"
-            INSERT INTO "GameSession" VALUES ($1, $2, $3) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, expires = excluded.expires RETURNING *;"#,
-            ClientType::Mobile => r#"
-            INSERT INTO "MobileSession" VALUES ($1, $2, $3) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, expires = excluded.expires RETURNING *;"#,
-        })
-            .bind(self.user)
-            .bind(self.uuid)
-            .bind(self.expires)
+    fn query_new(client_type: ClientType) -> String {
+        [
+            "INSERT INTO \"",
+            match client_type {
+                ClientType::Web => "WebSession",
+                ClientType::Game => "GameSession",
+                ClientType::Mobile => "MobileSession",
+            },
+            "\" VALUES ($1, default, $2) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, exp = excluded.exp RETURNING *;"
+        ].concat()
+    }
+
+    fn query_update(client_type: ClientType) -> String {
+        [
+            "UPDATE \"",
+            match client_type {
+                ClientType::Web => "WebSession",
+                ClientType::Game => "GameSession",
+                ClientType::Mobile => "MobileSession",
+            },
+            "\" SET exp = $2 WHERE sub = $1",
+        ]
+        .concat()
+    }
+
+    fn query_find(client_type: ClientType) -> String {
+        [
+            "SELECT * FROM \"",
+            match client_type {
+                ClientType::Web => "WebSession",
+                ClientType::Game => "GameSession",
+                ClientType::Mobile => "MobileSession",
+            },
+            "\" WHERE sub = $1",
+        ]
+        .concat()
+    }
+
+    pub async fn new(
+        db: &DB,
+        client_type: ClientType,
+        user: Uuid,
+        exp: u64,
+    ) -> Result<Self, Error> {
+        sqlx::query_as(&Self::query_new(client_type))
+            .bind(user)
+            .bind(Utc.timestamp_opt(exp as i64, 0).unwrap())
             .fetch_one(db)
             .await
+    }
+
+    pub async fn update(&self, db: &DB, client_type: ClientType) -> Result<Self, Error> {
+        sqlx::query_as(&Self::query_update(client_type))
+            .bind(self.sub)
+            .bind(self.exp)
+            .fetch_one(db)
+            .await
+    }
+
+    pub async fn find_by_sub(
+        db: &DB,
+        client_type: ClientType,
+        sub: Uuid,
+    ) -> Result<Option<Self>, Error> {
+        sqlx::query_as(&Self::query_find(client_type))
+            .bind(sub)
+            .fetch_optional(db)
+            .await
+    }
+
+    pub async fn refresh(
+        db: &DB,
+        client_type: ClientType,
+        user: Uuid,
+        new: bool,
+    ) -> Result<(Self, Uuid), Error> {
+        let with_access_uuid = |session| (session, Uuid::new_v4());
+
+        let exp = RefreshTokenClaims::new_exp();
+
+        if !new {
+            if let Some(mut session) = Self::find_by_sub(db, client_type, user).await? {
+                session.exp = Utc.timestamp_opt(exp as i64, 0).unwrap();
+                return session.update(db, client_type).await.map(with_access_uuid);
+            }
+        }
+
+        Self::new(db, client_type, user, exp)
+            .await
+            .map(with_access_uuid)
     }
 }

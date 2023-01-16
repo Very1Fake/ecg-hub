@@ -20,6 +20,7 @@ ed25519-compact = { version = "2.0", features = ["pem"] }
 envy = "0.4"
 hex = "0.4"
 hyper = { version = "0.14" }
+jsonwebtoken = "8.2"
 lazy_static = "1.4"
 rand = { package = "rand", version = "0.8", features = ["std"] }
 regex = "1.7"

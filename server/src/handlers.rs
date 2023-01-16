@@ -7,6 +7,7 @@ use axum::{
     Form, Json,
 };
 use hyper::StatusCode;
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::rngs::OsRng;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
 use tracing::error;
@@ -14,15 +15,17 @@ use validator::Validate;
 
 use common::{
     hub::HubStatus,
-    user::{UserData, UserStatus},
+    token::TokenPair,
+    user::{ClientType, UserData, UserStatus},
 };
 
 use crate::{
     app::HubState,
     config::STATUS,
     models::{
-        entities::User,
-        parsers::{LoginForm, RegisterForm, UserIdQuery},
+        claims::{AccessTokenClaims, RefreshTokenClaims, SecurityToken},
+        entities::{Session, User},
+        parsers::{KeyFormat, KeyFormatQuery, LoginForm, RegisterForm, UserIdQuery},
     },
 };
 
@@ -30,8 +33,14 @@ pub async fn info() -> Json<HubStatus<'static>> {
     Json(STATUS)
 }
 
-pub async fn pubkey(State(state): State<Arc<HubState>>) -> String {
-    state.keys.public_hex.clone()
+pub async fn pubkey(
+    State(state): State<Arc<HubState>>,
+    Query(format): Query<KeyFormatQuery>,
+) -> String {
+    match format.format {
+        KeyFormat::Hex => state.keys.public_hex.clone(),
+        KeyFormat::Pem => state.keys.public_pem.clone(),
+    }
 }
 
 // User
@@ -125,10 +134,12 @@ pub async fn user_post(
 pub async fn auth_login(
     State(state): State<Arc<HubState>>,
     Form(form): Form<LoginForm>,
-) -> impl IntoResponse {
+) -> Result<Json<TokenPair>, StatusCode> {
     if form.validate().is_ok() {
         let LoginForm {
-            username, password, ..
+            username,
+            password,
+            ct,
         } = form;
 
         if let Some(user) = User::find_by_username(&state.db, &username)
@@ -142,18 +153,45 @@ pub async fn auth_login(
                 )
                 .is_ok()
             {
-                StatusCode::OK
-            } else {
-                StatusCode::UNAUTHORIZED
+                return match user.status {
+                    UserStatus::Active => {
+                        let (session, access_uuid) =
+                            Session::refresh(&state.db, ct, user.uuid, true)
+                                .await
+                                .unwrap();
+
+                        Ok(Json(TokenPair {
+                            refresh: encode(
+                                &Header::new(Algorithm::EdDSA),
+                                &RefreshTokenClaims::new(
+                                    ct,
+                                    user.uuid,
+                                    session.uuid,
+                                    RefreshTokenClaims::new_exp(),
+                                ),
+                                &state.keys.encoding,
+                            )
+                            .expect("Failed to generate refresh token"),
+                            access: gen_access_token(
+                                &state.keys.encoding,
+                                ct,
+                                user.uuid,
+                                access_uuid,
+                            ),
+                        }))
+                    }
+                    UserStatus::Inactive => Err(StatusCode::IM_A_TEAPOT),
+                    UserStatus::Banned => Err(StatusCode::GONE),
+                };
             }
-        } else {
-            StatusCode::NOT_FOUND
         }
+        Err(StatusCode::UNAUTHORIZED)
     } else {
-        StatusCode::BAD_REQUEST
+        Err(StatusCode::BAD_REQUEST)
     }
 }
 
+// TODO: Add auto rotation
 pub async fn token_refresh() -> StatusCode {
     StatusCode::NOT_IMPLEMENTED
 }
@@ -164,4 +202,15 @@ pub async fn token_revoke() -> StatusCode {
 
 pub async fn token_revoke_all() -> StatusCode {
     StatusCode::NOT_IMPLEMENTED
+}
+
+// Utils
+
+fn gen_access_token(key: &EncodingKey, ct: ClientType, sub: Uuid, uuid: Uuid) -> String {
+    encode(
+        &Header::new(Algorithm::EdDSA),
+        &AccessTokenClaims::new(ct, sub, uuid, AccessTokenClaims::new_exp()),
+        key,
+    )
+    .expect("Failed to generate access token")
 }
