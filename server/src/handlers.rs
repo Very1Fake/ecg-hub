@@ -6,17 +6,16 @@ use axum::{
     response::IntoResponse,
     Form, Json,
 };
-use axum_extra::extract::{cookie::Cookie, CookieJar};
+use axum_extra::extract::CookieJar;
 use hyper::StatusCode;
 use rand::rngs::OsRng;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
-use time::Duration;
 use tracing::error;
 use validator::Validate;
 
 use common::{
     hub::HubStatus,
-    token::AccessToken,
+    responses::TokenResponse,
     user::{UserData, UserStatus},
 };
 
@@ -24,9 +23,9 @@ use crate::{
     app::HubState,
     config::STATUS,
     models::{
-        claims::{AccessTokenClaims, RefreshTokenClaims, SecurityToken},
         entities::{Session, User},
         parsers::{KeyFormat, KeyFormatQuery, LoginForm, RegisterForm, UserIdQuery},
+        tokens::{AccessToken, RefreshToken, SecurityToken},
     },
 };
 
@@ -136,7 +135,7 @@ pub async fn auth_login(
     State(state): State<Arc<HubState>>,
     jar: CookieJar,
     Form(form): Form<LoginForm>,
-) -> Result<(CookieJar, Json<AccessToken>), StatusCode> {
+) -> Result<(CookieJar, Json<TokenResponse>), StatusCode> {
     if form.validate().is_ok() {
         let LoginForm {
             username,
@@ -163,12 +162,13 @@ pub async fn auth_login(
                                 .unwrap();
 
                         Ok((
-                            jar.add(refresh_token_cookie(state.keys.sign_refresh_token(
-                                &RefreshTokenClaims::new(user.uuid, session.uuid, ct),
-                            ))),
-                            Json(AccessToken::new(state.keys.sign_access_token(
-                                &AccessTokenClaims::new(user.uuid, access_uuid, ct),
-                            ))),
+                            jar.add(
+                                RefreshToken::new(user.uuid, session.uuid, ct)
+                                    .to_cookie(&state.keys),
+                            ),
+                            Json(TokenResponse::new(
+                                AccessToken::new(user.uuid, access_uuid, ct).sign(&state.keys),
+                            )),
                         ))
                     }
                     UserStatus::Inactive => Err(StatusCode::IM_A_TEAPOT),
@@ -183,8 +183,28 @@ pub async fn auth_login(
 }
 
 // TODO: Add refresh token auto rotation
-pub async fn token_refresh() -> StatusCode {
-    StatusCode::NOT_IMPLEMENTED
+pub async fn token_refresh(
+    State(state): State<Arc<HubState>>,
+    jar: CookieJar,
+) -> Result<Json<TokenResponse>, StatusCode> {
+    if let Some(cookie) = jar.get("hub-rt") {
+        if let Ok(token) = RefreshToken::decode(cookie.value(), &state.keys) {
+            if let Some(session) = Session::find_by_uuid(&state.db, token.ct, token.jti)
+                .await
+                .expect("Failed to execute query while search for session")
+            {
+                Ok(Json(TokenResponse::new(
+                    AccessToken::new(session.sub, Uuid::new_v4(), token.ct).sign(&state.keys),
+                )))
+            } else {
+                Err(StatusCode::NOT_FOUND)
+            }
+        } else {
+            Err(StatusCode::BAD_REQUEST)
+        }
+    } else {
+        Err(StatusCode::EXPECTATION_FAILED)
+    }
 }
 
 // TODO: Add authentication middleware
@@ -194,13 +214,4 @@ pub async fn token_revoke() -> StatusCode {
 
 pub async fn token_revoke_all() -> StatusCode {
     StatusCode::NOT_IMPLEMENTED
-}
-
-// Utils
-
-fn refresh_token_cookie(token: String) -> Cookie<'static> {
-    let mut cookie = Cookie::new("hub-rt", token);
-    cookie.set_max_age(Duration::seconds(RefreshTokenClaims::LIFETIME));
-    cookie.set_http_only(true);
-    cookie
 }

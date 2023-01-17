@@ -12,7 +12,7 @@ use time::OffsetDateTime;
 
 use crate::{types::CiText, DB};
 
-use super::claims::{RefreshTokenClaims, SecurityToken};
+use super::tokens::{RefreshToken, SecurityToken};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // User
@@ -131,7 +131,7 @@ impl Session {
         .concat()
     }
 
-    fn query_find(client_type: ClientType) -> String {
+    fn query_find(client_type: ClientType, by_pk: bool) -> String {
         [
             "SELECT * FROM \"",
             match client_type {
@@ -139,7 +139,11 @@ impl Session {
                 ClientType::Game => "GameSession",
                 ClientType::Mobile => "MobileSession",
             },
-            "\" WHERE sub = $1",
+            if by_pk {
+                "\" WHERE sub = $1"
+            } else {
+                "\" WHERE uuid = $1"
+            },
         ]
         .concat()
     }
@@ -170,8 +174,19 @@ impl Session {
         client_type: ClientType,
         sub: Uuid,
     ) -> Result<Option<Self>, Error> {
-        sqlx::query_as(&Self::query_find(client_type))
+        sqlx::query_as(&Self::query_find(client_type, true))
             .bind(sub)
+            .fetch_optional(db)
+            .await
+    }
+
+    pub async fn find_by_uuid(
+        db: &DB,
+        client_type: ClientType,
+        uuid: Uuid,
+    ) -> Result<Option<Self>, Error> {
+        sqlx::query_as(&Self::query_find(client_type, false))
+            .bind(uuid)
             .fetch_optional(db)
             .await
     }
@@ -184,7 +199,7 @@ impl Session {
     ) -> Result<(Self, Uuid), Error> {
         let with_access_uuid = |session| (session, Uuid::new_v4());
 
-        let exp = RefreshTokenClaims::new_exp();
+        let exp = RefreshToken::new_exp();
 
         if !new {
             if let Some(mut session) = Self::find_by_sub(db, client_type, user).await? {

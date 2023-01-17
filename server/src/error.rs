@@ -17,6 +17,7 @@ macro_rules! impl_from_error {
 #[derive(Debug)]
 pub enum Error {
     ConfigError(String),
+    JWTError(jsonwebtoken::errors::Error),
     SqlxError(sqlx::Error),
     HyperError(hyper::Error),
     EnvyError(envy::Error),
@@ -25,6 +26,7 @@ pub enum Error {
     AddrParseError(AddrParseError),
 }
 
+impl_from_error!(jsonwebtoken::errors::Error, Error::JWTError);
 impl_from_error!(sqlx::Error, Error::SqlxError);
 impl_from_error!(hyper::Error, Error::HyperError);
 impl_from_error!(io::Error, Error::IOError);
@@ -38,6 +40,7 @@ impl IntoResponse for Error {
             StatusCode::INTERNAL_SERVER_ERROR,
             match self {
                 Error::ConfigError(err) => err,
+                Error::JWTError(err) => err.to_string(),
                 Error::SqlxError(err) => err.to_string(),
                 Error::HyperError(err) => err.to_string(),
                 Error::EnvyError(err) => err.to_string(),

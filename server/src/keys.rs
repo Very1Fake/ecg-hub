@@ -1,8 +1,6 @@
 use ed25519_compact::{KeyPair, Seed};
 use hex::ToHex;
-use jsonwebtoken::{encode, Algorithm, DecodingKey, EncodingKey, Header};
-
-use crate::models::claims::{AccessTokenClaims, RefreshTokenClaims};
+use jsonwebtoken::{DecodingKey, EncodingKey};
 
 pub struct Keys {
     pub pair: KeyPair,
@@ -31,16 +29,6 @@ impl Keys {
 
     pub fn rand() -> Self {
         Self::new(KeyPair::generate())
-    }
-
-    pub fn sign_refresh_token(&self, claims: &RefreshTokenClaims) -> String {
-        encode(&Header::new(Algorithm::EdDSA), claims, &self.encoding)
-            .expect("Failed to generate refresh token")
-    }
-
-    pub fn sign_access_token(&self, claims: &AccessTokenClaims) -> String {
-        encode(&Header::new(Algorithm::EdDSA), claims, &self.encoding)
-            .expect("Failed to generate access token")
     }
 }
 
