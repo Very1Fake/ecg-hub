@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
+use axum::extract::FromRef;
 use ed25519_compact::{KeyPair, Seed};
 use hex::ToHex;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 
+use crate::app::HubState;
+
+#[derive(Clone)]
 pub struct Keys {
     pub pair: KeyPair,
 
@@ -35,5 +41,11 @@ impl Keys {
 impl From<[u8; 32]> for Keys {
     fn from(bytes: [u8; 32]) -> Self {
         Self::new(KeyPair::from_seed(Seed::new(bytes)))
+    }
+}
+
+impl FromRef<Arc<HubState>> for Keys {
+    fn from_ref(state: &Arc<HubState>) -> Self {
+        state.keys.clone()
     }
 }

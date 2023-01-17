@@ -189,9 +189,10 @@ pub async fn token_refresh(
 ) -> Result<Json<TokenResponse>, StatusCode> {
     if let Some(cookie) = jar.get("hub-rt") {
         if let Ok(token) = RefreshToken::decode(cookie.value(), &state.keys) {
+            // TODO: Use better logging system
             if let Some(session) = Session::find_by_uuid(&state.db, token.ct, token.jti)
                 .await
-                .expect("Failed to execute query while search for session")
+                .expect("Failed to execute query while searching for session (token/refresh)")
             {
                 Ok(Json(TokenResponse::new(
                     AccessToken::new(session.sub, Uuid::new_v4(), token.ct).sign(&state.keys),

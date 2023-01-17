@@ -1,5 +1,12 @@
+use axum::{
+    extract::{FromRef, FromRequestParts},
+    headers::{authorization::Bearer, Authorization},
+    http::request::Parts,
+    TypedHeader,
+};
 use axum_extra::extract::cookie::Cookie;
 use common::user::ClientType;
+use hyper::StatusCode;
 use jsonwebtoken::{decode, encode, get_current_timestamp, Algorithm, Header, Validation};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use time::Duration;
@@ -91,4 +98,24 @@ impl AccessToken {
 impl SecurityToken for AccessToken {
     /// Tokens lifespan: 5 minutes
     const LIFETIME: i64 = 60 * 5;
+}
+
+#[async_trait::async_trait]
+impl<S> FromRequestParts<S> for AccessToken
+where
+    Keys: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let TypedHeader(Authorization(bearer)) =
+            TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
+                .await
+                .map_err(|_| StatusCode::EXPECTATION_FAILED)?;
+
+        let keys = Keys::from_ref(state);
+
+        Self::decode(bearer.token(), &keys).map_err(|_| StatusCode::BAD_REQUEST)
+    }
 }
