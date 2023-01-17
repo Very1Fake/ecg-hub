@@ -1,7 +1,7 @@
 use common::user::ClientType;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -29,7 +29,7 @@ pub struct UserIdQuery {
     pub username: Option<String>,
 }
 
-#[derive(Validate, Deserialize, Serialize, Debug)]
+#[derive(Validate, Deserialize, Debug)]
 pub struct RegisterForm {
     #[validate(regex = "USERNAME_REGEX")]
     pub username: String,
@@ -39,7 +39,7 @@ pub struct RegisterForm {
     pub password: String,
 }
 
-#[derive(Validate, Deserialize, Serialize, Debug)]
+#[derive(Validate, Deserialize, Debug)]
 pub struct LoginForm {
     #[validate(regex = "USERNAME_REGEX")]
     pub username: String,

@@ -16,7 +16,7 @@ use validator::Validate;
 use common::{
     hub::HubStatus,
     responses::TokenResponse,
-    user::{UserData, UserStatus},
+    user::{ClientType, UserData, UserStatus},
 };
 
 use crate::{
@@ -209,10 +209,57 @@ pub async fn token_refresh(
 }
 
 // TODO: Add authentication middleware
-pub async fn token_revoke() -> StatusCode {
-    StatusCode::NOT_IMPLEMENTED
+pub async fn token_revoke(
+    State(state): State<Arc<HubState>>,
+    AccessToken { sub, ct, .. }: AccessToken,
+) -> StatusCode {
+    if let Some(session) = Session::find_by_sub(&state.db, ct, sub)
+        .await
+        .expect("Failed to execute query while searching for session (token/revoke)")
+    {
+        match session.delete(&state.db, ct).await {
+            Ok(_) => StatusCode::OK,
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
-pub async fn token_revoke_all() -> StatusCode {
-    StatusCode::NOT_IMPLEMENTED
+pub async fn token_revoke_all(
+    State(state): State<Arc<HubState>>,
+    AccessToken { sub, ct, .. }: AccessToken,
+) -> StatusCode {
+    if let Some(session) = Session::find_by_sub(&state.db, ct, sub)
+        .await
+        .expect("Failed to execute query while searching for session (token/revoke_all)")
+    {
+        macro_rules! delete_session {
+            ($ct: expr) => {
+                if let Some(web_session) = if ct == $ct {
+                    Some(session)
+                } else {
+                    Session::find_by_sub(&state.db, $ct, sub)
+                        .await
+                        .unwrap()
+                } {
+                    if web_session
+                        .delete(&state.db, $ct)
+                        .await
+                        .is_err()
+                    {
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+            };
+        }
+
+        delete_session!(ClientType::Web);
+        delete_session!(ClientType::Game);
+        delete_session!(ClientType::Mobile);
+
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }

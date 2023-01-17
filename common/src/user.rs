@@ -18,7 +18,7 @@ pub enum UserStatus {
     Banned = 2,
 }
 
-#[derive(Deserialize_repr, Serialize_repr, Clone, Copy, Default, Debug)]
+#[derive(Deserialize_repr, Serialize_repr, PartialEq, Eq, Clone, Copy, Default, Debug)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
 #[repr(i16)]
 pub enum ClientType {

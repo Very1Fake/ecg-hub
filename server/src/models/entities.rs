@@ -117,6 +117,18 @@ impl Session {
             "\" VALUES ($1, default, $2) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, exp = excluded.exp RETURNING *;"
         ].concat()
     }
+    fn query_delete(client_type: ClientType) -> String {
+        [
+            "DELETE FROM \"",
+            match client_type {
+                ClientType::Web => "WebSession",
+                ClientType::Game => "GameSession",
+                ClientType::Mobile => "MobileSession",
+            },
+            "\" WHERE uuid = $1;",
+        ]
+        .concat()
+    }
 
     fn query_update(client_type: ClientType) -> String {
         [
@@ -188,6 +200,13 @@ impl Session {
         sqlx::query_as(&Self::query_find(client_type, false))
             .bind(uuid)
             .fetch_optional(db)
+            .await
+    }
+
+    pub async fn delete(&self, db: &DB, client_type: ClientType) -> Result<PgQueryResult, Error> {
+        sqlx::query(&Self::query_delete(client_type))
+            .bind(self.uuid)
+            .execute(db)
             .await
     }
 
