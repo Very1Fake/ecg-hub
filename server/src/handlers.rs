@@ -6,15 +6,17 @@ use axum::{
     response::IntoResponse,
     Form, Json,
 };
+use axum_extra::extract::{cookie::Cookie, CookieJar};
 use hyper::StatusCode;
 use rand::rngs::OsRng;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
+use time::Duration;
 use tracing::error;
 use validator::Validate;
 
 use common::{
     hub::HubStatus,
-    token::TokenPair,
+    token::AccessToken,
     user::{UserData, UserStatus},
 };
 
@@ -22,7 +24,7 @@ use crate::{
     app::HubState,
     config::STATUS,
     models::{
-        claims::{AccessTokenClaims, RefreshTokenClaims},
+        claims::{AccessTokenClaims, RefreshTokenClaims, SecurityToken},
         entities::{Session, User},
         parsers::{KeyFormat, KeyFormatQuery, LoginForm, RegisterForm, UserIdQuery},
     },
@@ -132,8 +134,9 @@ pub async fn user_post(
 
 pub async fn auth_login(
     State(state): State<Arc<HubState>>,
+    jar: CookieJar,
     Form(form): Form<LoginForm>,
-) -> Result<Json<TokenPair>, StatusCode> {
+) -> Result<(CookieJar, Json<AccessToken>), StatusCode> {
     if form.validate().is_ok() {
         let LoginForm {
             username,
@@ -159,18 +162,14 @@ pub async fn auth_login(
                                 .await
                                 .unwrap();
 
-                        Ok(Json(TokenPair {
-                            refresh: state.keys.sign_refresh_token(&RefreshTokenClaims::new(
-                                user.uuid,
-                                session.uuid,
-                                ct,
-                            )),
-                            access: state.keys.sign_access_token(&AccessTokenClaims::new(
-                                user.uuid,
-                                access_uuid,
-                                ct,
-                            )),
-                        }))
+                        Ok((
+                            jar.add(refresh_token_cookie(state.keys.sign_refresh_token(
+                                &RefreshTokenClaims::new(user.uuid, session.uuid, ct),
+                            ))),
+                            Json(AccessToken::new(state.keys.sign_access_token(
+                                &AccessTokenClaims::new(user.uuid, access_uuid, ct),
+                            ))),
+                        ))
                     }
                     UserStatus::Inactive => Err(StatusCode::IM_A_TEAPOT),
                     UserStatus::Banned => Err(StatusCode::GONE),
@@ -195,4 +194,13 @@ pub async fn token_revoke() -> StatusCode {
 
 pub async fn token_revoke_all() -> StatusCode {
     StatusCode::NOT_IMPLEMENTED
+}
+
+// Utils
+
+fn refresh_token_cookie(token: String) -> Cookie<'static> {
+    let mut cookie = Cookie::new("hub-rt", token);
+    cookie.set_max_age(Duration::seconds(RefreshTokenClaims::LIFETIME));
+    cookie.set_http_only(true);
+    cookie
 }
