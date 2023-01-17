@@ -1,4 +1,4 @@
-use ecg_hub_server::{config::Config, error::Error, run, utils::load_dotenv};
+use ecg_hub::{config::Config, error::Error, run, utils::load_dotenv};
 use tokio::runtime::Builder;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
