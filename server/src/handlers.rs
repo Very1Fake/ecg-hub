@@ -7,7 +7,6 @@ use axum::{
     Form, Json,
 };
 use hyper::StatusCode;
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::rngs::OsRng;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
 use tracing::error;
@@ -16,14 +15,14 @@ use validator::Validate;
 use common::{
     hub::HubStatus,
     token::TokenPair,
-    user::{ClientType, UserData, UserStatus},
+    user::{UserData, UserStatus},
 };
 
 use crate::{
     app::HubState,
     config::STATUS,
     models::{
-        claims::{AccessTokenClaims, RefreshTokenClaims, SecurityToken},
+        claims::{AccessTokenClaims, RefreshTokenClaims},
         entities::{Session, User},
         parsers::{KeyFormat, KeyFormatQuery, LoginForm, RegisterForm, UserIdQuery},
     },
@@ -161,23 +160,16 @@ pub async fn auth_login(
                                 .unwrap();
 
                         Ok(Json(TokenPair {
-                            refresh: encode(
-                                &Header::new(Algorithm::EdDSA),
-                                &RefreshTokenClaims::new(
-                                    ct,
-                                    user.uuid,
-                                    session.uuid,
-                                    RefreshTokenClaims::new_exp(),
-                                ),
-                                &state.keys.encoding,
-                            )
-                            .expect("Failed to generate refresh token"),
-                            access: gen_access_token(
-                                &state.keys.encoding,
+                            refresh: state.keys.sign_refresh_token(&RefreshTokenClaims::new(
+                                user.uuid,
+                                session.uuid,
                                 ct,
+                            )),
+                            access: state.keys.sign_access_token(&AccessTokenClaims::new(
                                 user.uuid,
                                 access_uuid,
-                            ),
+                                ct,
+                            )),
                         }))
                     }
                     UserStatus::Inactive => Err(StatusCode::IM_A_TEAPOT),
@@ -191,26 +183,16 @@ pub async fn auth_login(
     }
 }
 
-// TODO: Add auto rotation
+// TODO: Add refresh token auto rotation
 pub async fn token_refresh() -> StatusCode {
     StatusCode::NOT_IMPLEMENTED
 }
 
+// TODO: Add authentication middleware
 pub async fn token_revoke() -> StatusCode {
     StatusCode::NOT_IMPLEMENTED
 }
 
 pub async fn token_revoke_all() -> StatusCode {
     StatusCode::NOT_IMPLEMENTED
-}
-
-// Utils
-
-fn gen_access_token(key: &EncodingKey, ct: ClientType, sub: Uuid, uuid: Uuid) -> String {
-    encode(
-        &Header::new(Algorithm::EdDSA),
-        &AccessTokenClaims::new(ct, sub, uuid, AccessTokenClaims::new_exp()),
-        key,
-    )
-    .expect("Failed to generate access token")
 }

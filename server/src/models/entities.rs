@@ -1,17 +1,14 @@
 use std::collections::HashMap;
 
-use chrono::TimeZone;
 use common::user::{ClientType, UserData, UserStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{
     postgres::PgQueryResult,
-    types::{
-        chrono::{DateTime, Utc},
-        Json, Uuid,
-    },
+    types::{Json, Uuid},
     Error, FromRow,
 };
+use time::OffsetDateTime;
 
 use crate::{types::CiText, DB};
 
@@ -31,9 +28,9 @@ pub struct User {
     pub other: Json<HashMap<String, Value>>,
     pub status: UserStatus,
     #[sqlx(rename = "updated_at")]
-    pub updated: DateTime<Utc>,
+    pub updated: OffsetDateTime,
     #[sqlx(rename = "created_at")]
-    pub created: DateTime<Utc>,
+    pub created: OffsetDateTime,
 }
 
 impl User {
@@ -51,8 +48,8 @@ impl User {
             password,
             other: Json::default(),
             status,
-            updated: Utc::now(),
-            created: Utc::now(),
+            updated: OffsetDateTime::now_utc(),
+            created: OffsetDateTime::now_utc(),
         }
     }
 
@@ -105,7 +102,7 @@ pub struct Session {
     /// Session UUID
     pub uuid: Uuid,
     /// Expire timestamp
-    pub exp: DateTime<Utc>,
+    pub exp: OffsetDateTime,
 }
 
 impl Session {
@@ -151,11 +148,11 @@ impl Session {
         db: &DB,
         client_type: ClientType,
         user: Uuid,
-        exp: u64,
+        exp: i64,
     ) -> Result<Self, Error> {
         sqlx::query_as(&Self::query_new(client_type))
             .bind(user)
-            .bind(Utc.timestamp_opt(exp as i64, 0).unwrap())
+            .bind(OffsetDateTime::from_unix_timestamp(exp).unwrap())
             .fetch_one(db)
             .await
     }
@@ -191,7 +188,7 @@ impl Session {
 
         if !new {
             if let Some(mut session) = Self::find_by_sub(db, client_type, user).await? {
-                session.exp = Utc.timestamp_opt(exp as i64, 0).unwrap();
+                session.exp = OffsetDateTime::from_unix_timestamp(exp).unwrap();
                 return session.update(db, client_type).await.map(with_access_uuid);
             }
         }

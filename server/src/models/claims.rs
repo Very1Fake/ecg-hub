@@ -4,55 +4,65 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub trait SecurityToken {
-    const LIFESPAN: u64;
+    const LIFETIME: i64;
 
-    fn new_exp() -> u64 {
-        get_current_timestamp() + Self::LIFESPAN
+    fn new_exp() -> i64 {
+        get_current_timestamp() as i64 + Self::LIFETIME
     }
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct RefreshTokenClaims {
-    /// Client Type
-    pub aud: ClientType,
     /// User UUID
     pub sub: Uuid,
     /// Refresh Token UUID
     pub jti: Uuid,
     /// Expire time (UTC timestamp)
-    pub exp: u64,
+    pub exp: i64,
+    /// Client Type
+    pub ct: ClientType,
 }
 
 impl RefreshTokenClaims {
-    pub fn new(aud: ClientType, sub: Uuid, jti: Uuid, exp: u64) -> Self {
-        Self { aud, sub, jti, exp }
+    pub fn new(sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
+        Self {
+            ct,
+            sub,
+            jti,
+            exp: Self::new_exp(),
+        }
     }
 }
 
 impl SecurityToken for RefreshTokenClaims {
     /// Tokens lifespan: 1 month
-    const LIFESPAN: u64 = 60 * 60 * 24 * 30;
+    const LIFETIME: i64 = 60 * 60 * 24 * 30;
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AccessTokenClaims {
-    /// Client Type
-    pub aud: ClientType,
     /// User UUID
     pub sub: Uuid,
     /// Access Token UUID
     pub jti: Uuid,
     /// Expire time (UTC timestamp)
-    pub exp: u64,
+    pub exp: i64,
+    /// Client Type
+    pub ct: ClientType,
 }
 
 impl AccessTokenClaims {
-    pub fn new(aud: ClientType, sub: Uuid, jti: Uuid, exp: u64) -> Self {
-        Self { aud, sub, jti, exp }
+    pub fn new(sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
+        Self {
+            ct,
+            sub,
+            jti,
+            exp: Self::new_exp(),
+        }
     }
 }
 
 impl SecurityToken for AccessTokenClaims {
     /// Tokens lifespan: 5 minutes
-    const LIFESPAN: u64 = 60 * 5;
+    const LIFETIME: i64 = 60 * 5;
 }
