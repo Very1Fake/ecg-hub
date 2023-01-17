@@ -14,7 +14,6 @@ Cargo.lock
 ## MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-
 # IDEs
 
 ## VS Code
@@ -22,3 +21,7 @@ Cargo.lock
 
 ## Fleet
 .fleet/
+
+# Project
+
+.env

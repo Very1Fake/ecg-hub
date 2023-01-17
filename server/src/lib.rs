@@ -12,6 +12,7 @@ pub mod handlers;
 pub mod keys;
 pub mod models;
 pub mod types;
+pub mod utils;
 
 pub type DB = PgPool;
 
