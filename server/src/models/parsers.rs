@@ -1,7 +1,7 @@
 use common::user::ClientType;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::{Deserialize};
+use serde::Deserialize;
 use uuid::Uuid;
 use validator::Validate;
 

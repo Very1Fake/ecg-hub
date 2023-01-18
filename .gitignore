@@ -24,4 +24,4 @@ Cargo.lock
 
 # Project
 
-.env
+*.env

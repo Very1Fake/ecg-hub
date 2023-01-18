@@ -29,6 +29,10 @@ use crate::{
     },
 };
 
+pub async fn health() -> StatusCode {
+    StatusCode::OK
+}
+
 pub async fn info() -> Json<HubStatus<'static>> {
     Json(STATUS)
 }
@@ -208,7 +212,7 @@ pub async fn token_refresh(
     }
 }
 
-// TODO: Add authentication middleware
+// FIX: Check session by uuid, not sub
 pub async fn token_revoke(
     State(state): State<Arc<HubState>>,
     AccessToken { sub, ct, .. }: AccessToken,
@@ -226,6 +230,7 @@ pub async fn token_revoke(
     }
 }
 
+// FIX: Check session by uuid, not sub
 pub async fn token_revoke_all(
     State(state): State<Arc<HubState>>,
     AccessToken { sub, ct, .. }: AccessToken,
@@ -239,15 +244,9 @@ pub async fn token_revoke_all(
                 if let Some(web_session) = if ct == $ct {
                     Some(session)
                 } else {
-                    Session::find_by_sub(&state.db, $ct, sub)
-                        .await
-                        .unwrap()
+                    Session::find_by_sub(&state.db, $ct, sub).await.unwrap()
                 } {
-                    if web_session
-                        .delete(&state.db, $ct)
-                        .await
-                        .is_err()
-                    {
+                    if web_session.delete(&state.db, $ct).await.is_err() {
                         return StatusCode::INTERNAL_SERVER_ERROR;
                     }
                 }

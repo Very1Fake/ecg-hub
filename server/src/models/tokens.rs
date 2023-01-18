@@ -71,6 +71,7 @@ impl SecurityToken for RefreshToken {
     const LIFETIME: i64 = 60 * 60 * 24 * 30;
 }
 
+// TODO: Store refresh token id
 /// Contains access token claims
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AccessToken {

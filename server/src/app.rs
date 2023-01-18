@@ -10,7 +10,7 @@ use crate::{
     config::Config,
     error::Error,
     handlers::{
-        auth_login, info, pubkey, token_refresh, token_revoke, token_revoke_all, user_get,
+        auth_login, health, info, pubkey, token_refresh, token_revoke, token_revoke_all, user_get,
         user_post,
     },
     keys::Keys,
@@ -39,7 +39,8 @@ impl HubState {
 
     pub fn build_router(self) -> Router {
         Router::new()
-            .route("/status", get(info))
+            .route("/health", get(health))
+            .route("/info", get(info))
             .route("/user", get(user_get).post(user_post))
             .route("/pubkey", get(pubkey))
             .route("/auth/login", post(auth_login))
