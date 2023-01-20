@@ -35,6 +35,7 @@ pub struct Config {
     pub db_user: String,
     pub db_pass: String,
     pub db_name: String,
+    pub db_timeout: u64,
     pub db_pool_min: u32,
     pub db_pool_max: u32,
 
@@ -119,6 +120,7 @@ impl Default for Config {
             db_user: String::from("root"),
             db_pass: String::from("pass"),
             db_name: String::from("ecg"),
+            db_timeout: 8,
             db_pool_min: 1,
             db_pool_max: 8,
 

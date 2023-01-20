@@ -27,7 +27,7 @@ impl HubState {
         let db = PgPoolOptions::new()
             .min_connections(config.db_pool_min)
             .max_connections(config.db_pool_max)
-            .acquire_timeout(Duration::from_secs(8))
+            .acquire_timeout(Duration::from_secs(config.db_timeout))
             .connect(&config.db_uri())
             .await?;
 
