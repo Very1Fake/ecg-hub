@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use common::hub::{HubApiVersion, HubMode, HubStatus};
 use hex::ToHex;
@@ -38,6 +38,10 @@ pub struct Config {
     pub db_timeout: u64,
     pub db_pool_min: u32,
     pub db_pool_max: u32,
+
+    // SSL
+    pub ssl_cert: Option<PathBuf>,
+    pub ssl_key: Option<PathBuf>,
 
     // Security
     #[serde(deserialize_with = "Config::private_key_deserialize")]
@@ -106,7 +110,7 @@ impl Default for Config {
         Self {
             addr: String::from("0.0.0.0"),
             #[cfg(debug_assertions)]
-            port: 3030,
+            port: 8080,
             #[cfg(not(debug_assertions))]
             port: 80,
             #[cfg(debug_assertions)]
@@ -123,6 +127,9 @@ impl Default for Config {
             db_timeout: 8,
             db_pool_min: 1,
             db_pool_max: 8,
+
+            ssl_cert: None,
+            ssl_key: None,
 
             private_key: None,
         }

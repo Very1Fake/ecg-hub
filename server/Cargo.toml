@@ -2,7 +2,7 @@
 name = "ecg-hub"
 description = "Hub Server for ECG game"
 authors = ["Timur Israpilov <very1fake.coder@gmail.com>"]
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,8 +15,14 @@ uuid.workspace = true
 
 argon2 = "0.4"
 async-trait = "0.1"
-axum = { version = "0.6", features = ["http2", "headers"] }
+axum = { version = "0.6", default-features = false, features = [
+    "headers",
+    "json",
+    "form",
+    "query",
+] }
 axum-extra = { version = "0.4", features = ["cookie"] }
+axum-server = { version = "0.4", features = ["tls-rustls"] }
 dotenvy = "0.15"
 time = { version = "0.3", features = ["serde"] }
 ed25519-compact = { version = "2.0", features = ["pem"] }
