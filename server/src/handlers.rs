@@ -231,22 +231,20 @@ pub async fn token_revoke(
     }
 }
 
+// TODO: Renew current token
 pub async fn token_revoke_all(
     State(state): State<Arc<HubState>>,
-    AccessToken { iss, ct, .. }: AccessToken,
+    AccessToken { iss, sub, ct, .. }: AccessToken,
 ) -> StatusCode {
-    if let Some(session) = Session::find_by_uuid(&state.db, ct, iss)
+    if Session::find_by_uuid(&state.db, ct, iss)
         .await
         .expect("Failed to execute query while searching for session (token/revoke_all)")
+        .is_some()
     {
         macro_rules! delete_session {
             ($ct: expr) => {
-                if let Some(web_session) = if ct == $ct {
-                    Some(session)
-                } else {
-                    Session::find_by_uuid(&state.db, $ct, iss).await.unwrap()
-                } {
-                    if web_session.delete(&state.db, $ct).await.is_err() {
+                if ct != $ct {
+                    if Session::delete_by_sub(&state.db, sub, $ct).await.is_err() {
                         return StatusCode::INTERNAL_SERVER_ERROR;
                     }
                 }

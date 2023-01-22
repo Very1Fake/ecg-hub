@@ -117,7 +117,7 @@ impl Session {
             "\" VALUES ($1, default, $2) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, exp = excluded.exp RETURNING *;"
         ].concat()
     }
-    fn query_delete(client_type: ClientType) -> String {
+    fn query_delete(client_type: ClientType, by_sub: bool) -> String {
         [
             "DELETE FROM \"",
             match client_type {
@@ -125,7 +125,9 @@ impl Session {
                 ClientType::Game => "GameSession",
                 ClientType::Mobile => "MobileSession",
             },
-            "\" WHERE uuid = $1;",
+            "\" WHERE ",
+            if by_sub { "sub" } else { "uuid" },
+            " = $1;",
         ]
         .concat()
     }
@@ -204,8 +206,19 @@ impl Session {
     }
 
     pub async fn delete(&self, db: &DB, client_type: ClientType) -> Result<PgQueryResult, Error> {
-        sqlx::query(&Self::query_delete(client_type))
+        sqlx::query(&Self::query_delete(client_type, false))
             .bind(self.uuid)
+            .execute(db)
+            .await
+    }
+
+    pub async fn delete_by_sub(
+        db: &DB,
+        sub: Uuid,
+        client_type: ClientType,
+    ) -> Result<PgQueryResult, Error> {
+        sqlx::query(&Self::query_delete(client_type, true))
+            .bind(sub)
             .execute(db)
             .await
     }
