@@ -75,6 +75,8 @@ impl SecurityToken for RefreshToken {
 /// Contains access token claims
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AccessToken {
+    /// Session UUID
+    pub iss: Uuid,
     /// User UUID
     pub sub: Uuid,
     /// Access Token UUID
@@ -86,12 +88,13 @@ pub struct AccessToken {
 }
 
 impl AccessToken {
-    pub fn new(sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
+    pub fn new(iss: Uuid, sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
         Self {
-            ct,
+            iss,
             sub,
             jti,
             exp: Self::new_exp(),
+            ct,
         }
     }
 }

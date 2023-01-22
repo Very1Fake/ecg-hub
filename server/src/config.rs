@@ -121,7 +121,7 @@ impl Default for Config {
 
             db_addr: String::from("localhost"),
             db_port: 5432,
-            db_user: String::from("root"),
+            db_user: String::from("postgres"),
             db_pass: String::from("pass"),
             db_name: String::from("ecg"),
             db_timeout: 8,

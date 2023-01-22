@@ -171,7 +171,8 @@ pub async fn auth_login(
                                     .to_cookie(&state.keys),
                             ),
                             Json(TokenResponse::new(
-                                AccessToken::new(user.uuid, access_uuid, ct).sign(&state.keys),
+                                AccessToken::new(session.uuid, user.uuid, access_uuid, ct)
+                                    .sign(&state.keys),
                             )),
                         ))
                     }
@@ -199,7 +200,8 @@ pub async fn token_refresh(
                 .expect("Failed to execute query while searching for session (token/refresh)")
             {
                 Ok(Json(TokenResponse::new(
-                    AccessToken::new(session.sub, Uuid::new_v4(), token.ct).sign(&state.keys),
+                    AccessToken::new(session.uuid, session.sub, Uuid::new_v4(), token.ct)
+                        .sign(&state.keys),
                 )))
             } else {
                 Err(StatusCode::NOT_FOUND)
@@ -212,12 +214,11 @@ pub async fn token_refresh(
     }
 }
 
-// FIX: Check session by uuid, not sub
 pub async fn token_revoke(
     State(state): State<Arc<HubState>>,
-    AccessToken { sub, ct, .. }: AccessToken,
+    AccessToken { iss, ct, .. }: AccessToken,
 ) -> StatusCode {
-    if let Some(session) = Session::find_by_sub(&state.db, ct, sub)
+    if let Some(session) = Session::find_by_uuid(&state.db, ct, iss)
         .await
         .expect("Failed to execute query while searching for session (token/revoke)")
     {
@@ -230,12 +231,11 @@ pub async fn token_revoke(
     }
 }
 
-// FIX: Check session by uuid, not sub
 pub async fn token_revoke_all(
     State(state): State<Arc<HubState>>,
-    AccessToken { sub, ct, .. }: AccessToken,
+    AccessToken { iss, ct, .. }: AccessToken,
 ) -> StatusCode {
-    if let Some(session) = Session::find_by_sub(&state.db, ct, sub)
+    if let Some(session) = Session::find_by_uuid(&state.db, ct, iss)
         .await
         .expect("Failed to execute query while searching for session (token/revoke_all)")
     {
@@ -244,7 +244,7 @@ pub async fn token_revoke_all(
                 if let Some(web_session) = if ct == $ct {
                     Some(session)
                 } else {
-                    Session::find_by_sub(&state.db, $ct, sub).await.unwrap()
+                    Session::find_by_uuid(&state.db, $ct, iss).await.unwrap()
                 } {
                     if web_session.delete(&state.db, $ct).await.is_err() {
                         return StatusCode::INTERNAL_SERVER_ERROR;
