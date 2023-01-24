@@ -6,6 +6,15 @@ use uuid::Uuid;
 pub struct UserData {
     pub uuid: Uuid,
     pub username: String,
+    pub email: String,
+    pub status: UserStatus,
+    pub created_at: u64,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct UserInfo {
+    pub uuid: Uuid,
+    pub username: String,
     pub status: UserStatus,
 }
 

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use common::user::{ClientType, UserData, UserStatus};
+use common::user::{ClientType, UserData, UserInfo, UserStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{
@@ -81,6 +81,18 @@ impl User {
 }
 
 impl From<User> for UserData {
+    fn from(user: User) -> Self {
+        Self {
+            uuid: user.uuid,
+            username: user.username,
+            email: user.email.0,
+            status: user.status,
+            created_at: user.created.unix_timestamp() as u64,
+        }
+    }
+}
+
+impl From<User> for UserInfo {
     fn from(user: User) -> Self {
         Self {
             uuid: user.uuid,
