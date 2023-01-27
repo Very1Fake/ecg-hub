@@ -10,6 +10,7 @@ use axum_extra::extract::CookieJar;
 use hyper::StatusCode;
 use rand::rngs::OsRng;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
+use time::OffsetDateTime;
 use tracing::error;
 use validator::Validate;
 
@@ -124,10 +125,7 @@ pub async fn user_login(
             {
                 return match user.status {
                     UserStatus::Active => {
-                        let (session, access_uuid) =
-                            Session::refresh(&state.db, ct, user.uuid, true)
-                                .await
-                                .unwrap();
+                        let session = Session::new(&state.db, ct, user.uuid).await.unwrap();
 
                         Ok((
                             jar.add(
@@ -135,7 +133,7 @@ pub async fn user_login(
                                     .to_cookie(&state.keys),
                             ),
                             Json(TokenResponse::new(
-                                AccessToken::new(session.uuid, user.uuid, access_uuid, ct)
+                                AccessToken::new(session.uuid, user.uuid, Uuid::new_v4(), ct)
                                     .sign(&state.keys),
                             )),
                         ))
@@ -208,19 +206,31 @@ pub async fn user_register(
 // TODO: Add refresh token auto rotation
 pub async fn token_refresh(
     State(state): State<Arc<HubState>>,
-    jar: CookieJar,
-) -> Result<Json<TokenResponse>, StatusCode> {
+    mut jar: CookieJar,
+) -> Result<(CookieJar, Json<TokenResponse>), StatusCode> {
     if let Some(cookie) = jar.get("hub-rt") {
-        if let Ok(token) = RefreshToken::decode(cookie.value(), &state.keys) {
+        if let Ok(RefreshToken { sub, jti, ct, .. }) =
+            RefreshToken::decode(cookie.value(), &state.keys)
+        {
             // TODO: Use better logging system
-            if let Some(session) = Session::find_by_uuid(&state.db, token.ct, token.jti)
+            if let Some(mut session) = Session::find_by_uuid(&state.db, ct, jti)
                 .await
                 .expect("Failed to execute query while searching for session (token/refresh)")
             {
-                Ok(Json(TokenResponse::new(
-                    AccessToken::new(session.uuid, session.sub, Uuid::new_v4(), token.ct)
-                        .sign(&state.keys),
-                )))
+                if session.exp - OffsetDateTime::now_utc() < RefreshToken::ROTATION_PERIOD {
+                    session = Session::new(&state.db, ct, sub)
+                        .await
+                        .expect("Failed to refresh session");
+                    jar = jar.add(RefreshToken::from((&session, ct)).to_cookie(&state.keys));
+                }
+
+                Ok((
+                    jar,
+                    Json(TokenResponse::new(
+                        AccessToken::new(session.uuid, session.sub, Uuid::new_v4(), ct)
+                            .sign(&state.keys),
+                    )),
+                ))
             } else {
                 Err(StatusCode::NOT_FOUND)
             }

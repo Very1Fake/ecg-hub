@@ -14,6 +14,8 @@ use uuid::Uuid;
 
 use crate::keys::Keys;
 
+use super::entities::Session;
+
 pub trait SecurityToken: DeserializeOwned + Serialize
 where
     Self: Sized,
@@ -48,14 +50,15 @@ pub struct RefreshToken {
 
 impl RefreshToken {
     pub const COOKIE_NAME: &str = "hub-rt";
+    pub const ROTATION_PERIOD: Duration = Duration::days(7);
+
+    #[inline]
+    pub const fn _new_raw(sub: Uuid, jti: Uuid, exp: i64, ct: ClientType) -> Self {
+        Self { sub, jti, exp, ct }
+    }
 
     pub fn new(sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
-        Self {
-            ct,
-            sub,
-            jti,
-            exp: Self::new_exp(),
-        }
+        Self::_new_raw(sub, jti, Self::new_exp(), ct)
     }
 
     pub fn to_cookie(&self, keys: &Keys) -> Cookie<'static> {
@@ -69,6 +72,12 @@ impl RefreshToken {
 impl SecurityToken for RefreshToken {
     /// Tokens lifespan: 6 month
     const LIFETIME: i64 = 60 * 60 * 24 * 30 * 6;
+}
+
+impl From<(&Session, ClientType)> for RefreshToken {
+    fn from((session, ct): (&Session, ClientType)) -> Self {
+        Self::_new_raw(session.sub, session.uuid, session.exp.unix_timestamp(), ct)
+    }
 }
 
 // TODO: Store refresh token id

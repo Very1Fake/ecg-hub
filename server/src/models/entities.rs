@@ -129,6 +129,7 @@ impl Session {
             "\" VALUES ($1, default, $2) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, exp = excluded.exp RETURNING *;"
         ].concat()
     }
+
     fn query_delete(client_type: ClientType, by_sub: bool) -> String {
         [
             "DELETE FROM \"",
@@ -140,19 +141,6 @@ impl Session {
             "\" WHERE ",
             if by_sub { "sub" } else { "uuid" },
             " = $1;",
-        ]
-        .concat()
-    }
-
-    fn query_update(client_type: ClientType) -> String {
-        [
-            "UPDATE \"",
-            match client_type {
-                ClientType::Web => "WebSession",
-                ClientType::Game => "GameSession",
-                ClientType::Mobile => "MobileSession",
-            },
-            "\" SET exp = $2 WHERE sub = $1",
         ]
         .concat()
     }
@@ -174,23 +162,10 @@ impl Session {
         .concat()
     }
 
-    pub async fn new(
-        db: &DB,
-        client_type: ClientType,
-        user: Uuid,
-        exp: i64,
-    ) -> Result<Self, Error> {
+    pub async fn new(db: &DB, client_type: ClientType, sub: Uuid) -> Result<Self, Error> {
         sqlx::query_as(&Self::query_new(client_type))
-            .bind(user)
-            .bind(OffsetDateTime::from_unix_timestamp(exp).unwrap())
-            .fetch_one(db)
-            .await
-    }
-
-    pub async fn update(&self, db: &DB, client_type: ClientType) -> Result<Self, Error> {
-        sqlx::query_as(&Self::query_update(client_type))
-            .bind(self.sub)
-            .bind(self.exp)
+            .bind(sub)
+            .bind(OffsetDateTime::from_unix_timestamp(RefreshToken::new_exp()).unwrap())
             .fetch_one(db)
             .await
     }
@@ -233,27 +208,5 @@ impl Session {
             .bind(sub)
             .execute(db)
             .await
-    }
-
-    pub async fn refresh(
-        db: &DB,
-        client_type: ClientType,
-        user: Uuid,
-        new: bool,
-    ) -> Result<(Self, Uuid), Error> {
-        let with_access_uuid = |session| (session, Uuid::new_v4());
-
-        let exp = RefreshToken::new_exp();
-
-        if !new {
-            if let Some(mut session) = Self::find_by_sub(db, client_type, user).await? {
-                session.exp = OffsetDateTime::from_unix_timestamp(exp).unwrap();
-                return session.update(db, client_type).await.map(with_access_uuid);
-            }
-        }
-
-        Self::new(db, client_type, user, exp)
-            .await
-            .map(with_access_uuid)
     }
 }
