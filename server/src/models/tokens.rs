@@ -100,8 +100,8 @@ impl AccessToken {
 }
 
 impl SecurityToken for AccessToken {
-    /// Tokens lifespan: 5 minutes
-    const LIFETIME: i64 = 60 * 5;
+    /// Tokens lifespan: 1 minute
+    const LIFETIME: i64 = 60;
 }
 
 #[async_trait::async_trait]
