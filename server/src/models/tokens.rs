@@ -67,8 +67,8 @@ impl RefreshToken {
 }
 
 impl SecurityToken for RefreshToken {
-    /// Tokens lifespan: 1 month
-    const LIFETIME: i64 = 60 * 60 * 24 * 30;
+    /// Tokens lifespan: 6 month
+    const LIFETIME: i64 = 60 * 60 * 24 * 30 * 6;
 }
 
 // TODO: Store refresh token id
