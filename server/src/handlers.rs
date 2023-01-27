@@ -4,7 +4,7 @@ use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, Pa
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
-    Form, Json,
+    Json,
 };
 use axum_extra::extract::CookieJar;
 use hyper::StatusCode;
@@ -15,7 +15,7 @@ use validator::Validate;
 
 use common::{
     hub::HubStatus,
-    responses::TokenResponse,
+    responses::{RegistrationResponse, TokenResponse},
     user::{ClientType, UserData, UserInfo, UserStatus},
 };
 
@@ -24,7 +24,7 @@ use crate::{
     config::STATUS,
     models::{
         entities::{Session, User},
-        parsers::{KeyFormat, KeyFormatQuery, LoginForm, RegisterForm, UserIdQuery},
+        parsers::{KeyFormat, KeyFormatQuery, LoginBody, RegisterBody, UserIdQuery},
         tokens::{AccessToken, RefreshToken, SecurityToken},
     },
 };
@@ -102,14 +102,14 @@ pub async fn user_data(
 pub async fn user_login(
     State(state): State<Arc<HubState>>,
     jar: CookieJar,
-    Form(form): Form<LoginForm>,
+    Json(body): Json<LoginBody>,
 ) -> Result<(CookieJar, Json<TokenResponse>), StatusCode> {
-    if form.validate().is_ok() {
-        let LoginForm {
+    if body.validate().is_ok() {
+        let LoginBody {
             username,
             password,
             ct,
-        } = form;
+        } = body;
 
         if let Some(user) = User::find_by_username(&state.db, &username)
             .await
@@ -153,17 +153,19 @@ pub async fn user_login(
 
 pub async fn user_register(
     State(state): State<Arc<HubState>>,
-    Json(form): Json<RegisterForm>,
+    Json(body): Json<RegisterBody>,
 ) -> impl IntoResponse {
-    if form.validate().is_ok() {
-        let RegisterForm {
+    if body.validate().is_ok() {
+        let RegisterBody {
             username,
             email,
             password,
-        } = form;
+        } = body;
+
+        let uuid = Uuid::new_v4();
 
         match User::new(
-            Uuid::new_v4(),
+            uuid,
             username.clone(),
             email.clone(),
             Argon2::default()
@@ -196,7 +198,7 @@ pub async fn user_register(
                 error!(?err);
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-            _ => StatusCode::CREATED.into_response(),
+            Ok(_) => (StatusCode::CREATED, Json(RegistrationResponse::new(uuid))).into_response(),
         }
     } else {
         StatusCode::BAD_REQUEST.into_response()

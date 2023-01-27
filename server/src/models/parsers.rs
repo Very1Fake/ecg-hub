@@ -30,7 +30,7 @@ pub struct UserIdQuery {
 }
 
 #[derive(Validate, Deserialize, Debug)]
-pub struct RegisterForm {
+pub struct RegisterBody {
     #[validate(regex = "USERNAME_REGEX")]
     pub username: String,
     #[validate(email)]
@@ -40,7 +40,7 @@ pub struct RegisterForm {
 }
 
 #[derive(Validate, Deserialize, Debug)]
-pub struct LoginForm {
+pub struct LoginBody {
     #[validate(regex = "USERNAME_REGEX")]
     pub username: String,
     #[validate(length(min = 6, max = 64))]

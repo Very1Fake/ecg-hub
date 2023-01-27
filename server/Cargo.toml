@@ -2,7 +2,7 @@
 name = "ecg-hub"
 description = "Hub Server for ECG game"
 authors = ["Timur Israpilov <very1fake.coder@gmail.com>"]
-version = "0.0.8"
+version = "0.0.9"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -18,7 +18,6 @@ async-trait = "0.1"
 axum = { version = "0.6", default-features = false, features = [
     "headers",
     "json",
-    "form",
     "query",
 ] }
 axum-extra = { version = "0.4", features = ["cookie"] }
