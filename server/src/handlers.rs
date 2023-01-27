@@ -259,11 +259,11 @@ pub async fn token_revoke(
     }
 }
 
-// TODO: Renew current token
 pub async fn token_revoke_all(
     State(state): State<Arc<HubState>>,
+    jar: CookieJar,
     AccessToken { iss, sub, ct, .. }: AccessToken,
-) -> StatusCode {
+) -> impl IntoResponse {
     if Session::find_by_uuid(&state.db, ct, iss)
         .await
         .expect("Failed to execute query while searching for session (token/revoke_all)")
@@ -271,10 +271,8 @@ pub async fn token_revoke_all(
     {
         macro_rules! delete_session {
             ($ct: expr) => {
-                if ct != $ct {
-                    if Session::delete_by_sub(&state.db, sub, $ct).await.is_err() {
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
+                if Session::delete_by_sub(&state.db, sub, $ct).await.is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
             };
         }
@@ -283,8 +281,20 @@ pub async fn token_revoke_all(
         delete_session!(ClientType::Game);
         delete_session!(ClientType::Mobile);
 
-        StatusCode::OK
+        (
+            jar.add(
+                RefreshToken::from((
+                    &Session::new(&state.db, ct, sub)
+                        .await
+                        .expect("Failed to rotate refresh token"),
+                    ct,
+                ))
+                .to_cookie(&state.keys),
+            ),
+            StatusCode::OK,
+        )
+            .into_response()
     } else {
-        StatusCode::NOT_FOUND
+        StatusCode::NOT_FOUND.into_response()
     }
 }
