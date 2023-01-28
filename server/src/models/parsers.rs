@@ -48,3 +48,11 @@ pub struct LoginBody {
     #[serde(default)]
     pub ct: ClientType,
 }
+
+#[derive(Validate, Deserialize, Debug)]
+pub struct PasswordChangeBody {
+    #[validate(length(min = 6, max = 64))]
+    pub old_password: String,
+    #[validate(length(min = 6, max = 64))]
+    pub new_password: String,
+}

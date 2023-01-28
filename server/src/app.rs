@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
-    routing::{get, post},
+    routing::{get, post, put},
     Router,
 };
 use axum_server::{
@@ -17,8 +17,8 @@ use crate::{
     config::Config,
     error::Error,
     handlers::{
-        health, status, pubkey, token_refresh, token_revoke, token_revoke_all, user_data, user_info,
-        user_login, user_register,
+        health, pubkey, status, token_refresh, token_revoke, token_revoke_all, user_data,
+        user_info, user_login, user_password, user_register,
     },
     keys::Keys,
     DB,
@@ -54,6 +54,7 @@ impl HubState {
             .route("/user/data", get(user_data))
             .route("/user/login", post(user_login))
             .route("/user/register", post(user_register))
+            .route("/user/password", put(user_password))
             .route("/token/refresh", get(token_refresh))
             .route("/token/revoke", get(token_revoke))
             .route("/token/revoke_all", get(token_revoke_all))

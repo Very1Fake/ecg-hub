@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
@@ -8,7 +8,6 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use hyper::StatusCode;
-use rand::rngs::OsRng;
 use sqlx::{postgres::PgDatabaseError, types::Uuid};
 use time::OffsetDateTime;
 use tracing::error;
@@ -25,9 +24,12 @@ use crate::{
     config::STATUS,
     models::{
         entities::{Session, User},
-        parsers::{KeyFormat, KeyFormatQuery, LoginBody, RegisterBody, UserIdQuery},
+        parsers::{
+            KeyFormat, KeyFormatQuery, LoginBody, PasswordChangeBody, RegisterBody, UserIdQuery,
+        },
         tokens::{AccessToken, RefreshToken, SecurityToken},
     },
+    utils::hash_password,
 };
 
 /// Public Endpoint: For health checks
@@ -173,10 +175,7 @@ pub async fn user_register(
             uuid,
             username.clone(),
             email.clone(),
-            Argon2::default()
-                .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
-                .expect("password hashing failed")
-                .to_string(),
+            hash_password(&password),
             UserStatus::Active,
         )
         .insert(&state.db)
@@ -210,7 +209,40 @@ pub async fn user_register(
     }
 }
 
-// Private Endpoint: Generates a new access token using the refresh token
+/// Private Endpoint: Allows user to change the password with their old password and access token
+pub async fn user_password(
+    State(state): State<Arc<HubState>>,
+    AccessToken { sub, .. }: AccessToken,
+    Json(body): Json<PasswordChangeBody>,
+) -> StatusCode {
+    if body.validate().is_ok() {
+        if let Some(mut user) = User::find_by_uuid(&state.db, sub)
+            .await
+            .expect("Failed to find user")
+        {
+            if Argon2::default()
+                .verify_password(
+                    body.old_password.as_bytes(),
+                    &PasswordHash::new(&user.password).expect("Failed to parse password hash"),
+                )
+                .is_ok()
+            {
+                user.password = hash_password(&body.new_password);
+                user.update_password(&state.db)
+                    .await
+                    .expect("Failed to make update request to DB");
+                StatusCode::OK
+            } else {
+                StatusCode::NOT_MODIFIED
+            }
+        } else {
+            StatusCode::NOT_FOUND
+        }
+    } else {
+        StatusCode::BAD_REQUEST
+    }
+}
+
 /// Private Endpoint: Generates a new access token using the refresh token
 pub async fn token_refresh(
     State(state): State<Arc<HubState>>,

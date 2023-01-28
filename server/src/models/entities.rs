@@ -78,6 +78,14 @@ impl User {
             .execute(db)
             .await
     }
+
+    pub async fn update_password(&self, db: &DB) -> Result<PgQueryResult, Error> {
+        sqlx::query(r#"UPDATE "User" SET password = $1 WHERE uuid = $2"#)
+            .bind(self.password.clone())
+            .bind(self.uuid)
+            .execute(db)
+            .await
+    }
 }
 
 impl From<User> for UserData {
