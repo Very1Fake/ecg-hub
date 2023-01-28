@@ -30,14 +30,17 @@ use crate::{
     },
 };
 
+/// Public Endpoint: For health checks
 pub async fn health() -> StatusCode {
     StatusCode::OK
 }
 
-pub async fn info() -> Json<HubStatus<'static>> {
+/// Public Endpoint: Returns hub status
+pub async fn status() -> Json<HubStatus<'static>> {
     Json(STATUS)
 }
 
+/// Public Endpoint: Returns the public key used to verify the signature of the tokens
 pub async fn pubkey(
     State(state): State<Arc<HubState>>,
     Query(format): Query<KeyFormatQuery>,
@@ -50,6 +53,7 @@ pub async fn pubkey(
 
 // User
 
+/// Public Endpoint: Looks up for the uuid and username of the account
 pub async fn user_info(
     State(state): State<Arc<HubState>>,
     user_id: Query<UserIdQuery>,
@@ -82,6 +86,7 @@ pub async fn user_info(
     ))
 }
 
+/// Private Endpoint: Allows the user to retrieve their personal data
 pub async fn user_data(
     State(state): State<Arc<HubState>>,
     AccessToken { sub, .. }: AccessToken,
@@ -100,6 +105,7 @@ pub async fn user_data(
 
 // Security
 
+/// Private Endpoint: Allows user to create a new session and a refresh/access token pair
 pub async fn user_login(
     State(state): State<Arc<HubState>>,
     jar: CookieJar,
@@ -149,6 +155,7 @@ pub async fn user_login(
     }
 }
 
+/// Endpoint: Creates new a user account
 pub async fn user_register(
     State(state): State<Arc<HubState>>,
     Json(body): Json<RegisterBody>,
@@ -203,7 +210,8 @@ pub async fn user_register(
     }
 }
 
-// TODO: Add refresh token auto rotation
+// Private Endpoint: Generates a new access token using the refresh token
+/// Private Endpoint: Generates a new access token using the refresh token
 pub async fn token_refresh(
     State(state): State<Arc<HubState>>,
     mut jar: CookieJar,
@@ -242,6 +250,7 @@ pub async fn token_refresh(
     }
 }
 
+/// Private Endpoint: Ends current session with the access token
 pub async fn token_revoke(
     State(state): State<Arc<HubState>>,
     AccessToken { iss, ct, .. }: AccessToken,
@@ -259,6 +268,7 @@ pub async fn token_revoke(
     }
 }
 
+/// Private Endpoint: Ends all user session and creates a new one for current client type
 pub async fn token_revoke_all(
     State(state): State<Arc<HubState>>,
     jar: CookieJar,
