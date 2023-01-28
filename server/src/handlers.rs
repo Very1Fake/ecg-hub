@@ -25,9 +25,10 @@ use crate::{
     models::{
         entities::{Session, User},
         parsers::{
-            KeyFormat, KeyFormatQuery, LoginBody, PasswordChangeBody, RegisterBody, UserIdQuery,
+            KeyFormat, KeyFormatQuery, LoginBody, PITQuery, PasswordChangeBody, RegisterBody,
+            UserIdQuery,
         },
-        tokens::{AccessToken, RefreshToken, SecurityToken},
+        tokens::{AccessToken, PlayerIdentityToken, RefreshToken, SecurityToken},
     },
     utils::hash_password,
 };
@@ -141,8 +142,7 @@ pub async fn user_login(
                                     .to_cookie(&state.keys),
                             ),
                             Json(TokenResponse::new(
-                                AccessToken::new(session.uuid, user.uuid, Uuid::new_v4(), ct)
-                                    .sign(&state.keys),
+                                AccessToken::new(session.uuid, user.uuid, ct).sign(&state.keys),
                             )),
                         ))
                     }
@@ -243,6 +243,7 @@ pub async fn user_password(
     }
 }
 
+// TODO: Return token as plain text
 /// Private Endpoint: Generates a new access token using the refresh token
 pub async fn token_refresh(
     State(state): State<Arc<HubState>>,
@@ -267,8 +268,7 @@ pub async fn token_refresh(
                 Ok((
                     jar,
                     Json(TokenResponse::new(
-                        AccessToken::new(session.uuid, session.sub, Uuid::new_v4(), ct)
-                            .sign(&state.keys),
+                        AccessToken::new(session.uuid, session.sub, ct).sign(&state.keys),
                     )),
                 ))
             } else {
@@ -338,5 +338,18 @@ pub async fn token_revoke_all(
             .into_response()
     } else {
         StatusCode::NOT_FOUND.into_response()
+    }
+}
+
+/// Private Endpoint: Allows user to generate PIT for joining game servers
+pub async fn token_pit(
+    State(state): State<Arc<HubState>>,
+    AccessToken { sub, ct, .. }: AccessToken,
+    Query(query): Query<PITQuery>,
+) -> Result<String, StatusCode> {
+    if query.validate().is_ok() {
+        Ok(PlayerIdentityToken::new(query.sid, sub, ct).sign(&state.keys))
+    } else {
+        Err(StatusCode::BAD_REQUEST)
     }
 }

@@ -53,12 +53,12 @@ impl RefreshToken {
     pub const ROTATION_PERIOD: Duration = Duration::days(7);
 
     #[inline]
-    pub const fn _new_raw(sub: Uuid, jti: Uuid, exp: i64, ct: ClientType) -> Self {
+    pub const fn new_raw(sub: Uuid, jti: Uuid, exp: i64, ct: ClientType) -> Self {
         Self { sub, jti, exp, ct }
     }
 
     pub fn new(sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
-        Self::_new_raw(sub, jti, Self::new_exp(), ct)
+        Self::new_raw(sub, jti, Self::new_exp(), ct)
     }
 
     pub fn to_cookie(&self, keys: &Keys) -> Cookie<'static> {
@@ -70,17 +70,16 @@ impl RefreshToken {
 }
 
 impl SecurityToken for RefreshToken {
-    /// Tokens lifespan: 6 month
+    /// Refresh token lifetime: 6 month
     const LIFETIME: i64 = 60 * 60 * 24 * 30 * 6;
 }
 
 impl From<(&Session, ClientType)> for RefreshToken {
     fn from((session, ct): (&Session, ClientType)) -> Self {
-        Self::_new_raw(session.sub, session.uuid, session.exp.unix_timestamp(), ct)
+        Self::new_raw(session.sub, session.uuid, session.exp.unix_timestamp(), ct)
     }
 }
 
-// TODO: Store refresh token id
 /// Contains access token claims
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AccessToken {
@@ -97,11 +96,11 @@ pub struct AccessToken {
 }
 
 impl AccessToken {
-    pub fn new(iss: Uuid, sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
+    pub fn new(iss: Uuid, sub: Uuid, ct: ClientType) -> Self {
         Self {
             iss,
             sub,
-            jti,
+            jti: Uuid::new_v4(),
             exp: Self::new_exp(),
             ct,
         }
@@ -109,7 +108,7 @@ impl AccessToken {
 }
 
 impl SecurityToken for AccessToken {
-    /// Tokens lifespan: 1 minute
+    /// Access token lifetime: 1 minute
     const LIFETIME: i64 = 60;
 }
 
@@ -121,6 +120,7 @@ where
 {
     type Rejection = StatusCode;
 
+    // TODO: Return FORBIDDEN on bad key
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let TypedHeader(Authorization(bearer)) =
             TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
@@ -131,4 +131,58 @@ where
 
         Self::decode(bearer.token(), &keys).map_err(|_| StatusCode::BAD_REQUEST)
     }
+}
+
+/// Contains Player Identity Token (PIT) claims
+#[derive(Deserialize, Serialize, Debug)]
+pub struct PlayerIdentityToken {
+    /// Server ID (SID)
+    pub aud: String,
+    /// User UUID
+    pub sub: Uuid,
+    /// Access Token UUID
+    pub jti: Uuid,
+    /// Expire time (UTC timestamp)
+    pub exp: i64,
+    /// Not before time (UTC timestamp)
+    pub nbf: i64,
+    /// Client Type
+    pub ct: ClientType,
+}
+
+impl PlayerIdentityToken {
+    #[inline]
+    pub const fn new_raw(
+        aud: String,
+        sub: Uuid,
+        jti: Uuid,
+        exp: i64,
+        nbf: i64,
+        ct: ClientType,
+    ) -> Self {
+        Self {
+            aud,
+            sub,
+            jti,
+            exp,
+            nbf,
+            ct,
+        }
+    }
+
+    pub fn new(aud: String, sub: Uuid, ct: ClientType) -> Self {
+        Self::new_raw(
+            aud,
+            sub,
+            Uuid::new_v4(),
+            Self::new_exp(),
+            get_current_timestamp() as i64,
+            ct,
+        )
+    }
+}
+
+impl SecurityToken for PlayerIdentityToken {
+    /// PIT lifetime: 15 seconds
+    const LIFETIME: i64 = 15;
 }

@@ -6,7 +6,10 @@ use uuid::Uuid;
 use validator::Validate;
 
 lazy_static! {
+    /// Regular expression for username
     pub static ref USERNAME_REGEX: Regex = Regex::new("^[a-zA-Z0-9_]{3,24}$").unwrap();
+    /// Regular expression for Server ID (e.g. "eYp1Zl1td14E")
+    pub static ref SID_REGEX: Regex = Regex::new("^[a-zA-Z0-9]{12}$").unwrap();
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -23,10 +26,17 @@ pub struct KeyFormatQuery {
     pub format: KeyFormat,
 }
 
+// TODO: Add username validation
 #[derive(Deserialize, Debug)]
 pub struct UserIdQuery {
     pub uuid: Option<Uuid>,
     pub username: Option<String>,
+}
+
+#[derive(Validate, Deserialize, Debug)]
+pub struct PITQuery {
+    #[validate(regex = "SID_REGEX")]
+    pub sid: String,
 }
 
 #[derive(Validate, Deserialize, Debug)]

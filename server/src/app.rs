@@ -17,8 +17,8 @@ use crate::{
     config::Config,
     error::Error,
     handlers::{
-        health, pubkey, status, token_refresh, token_revoke, token_revoke_all, user_data,
-        user_info, user_login, user_password, user_register,
+        health, pubkey, status, token_pit, token_refresh, token_revoke, token_revoke_all,
+        user_data, user_info, user_login, user_password, user_register,
     },
     keys::Keys,
     DB,
@@ -58,6 +58,7 @@ impl HubState {
             .route("/token/refresh", get(token_refresh))
             .route("/token/revoke", get(token_revoke))
             .route("/token/revoke_all", get(token_revoke_all))
+            .route("/token/pit", get(token_pit))
             .with_state(Arc::new(self))
     }
 }
