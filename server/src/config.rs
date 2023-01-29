@@ -49,7 +49,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub const DEFAULT_LOG_FILTER: &[&'static str] = &["hyper=info", "mio=info"];
+    pub const DEFAULT_LOG_FILTER: &[&'static str] = &["hyper=info", "mio=info", "sqlx::query=warn"];
 
     fn log_level_deserialize<'de, D>(deserializer: D) -> Result<LevelFilter, D::Error>
     where

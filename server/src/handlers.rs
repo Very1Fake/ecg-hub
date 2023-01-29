@@ -15,7 +15,7 @@ use validator::Validate;
 
 use common::{
     hub::HubStatus,
-    responses::{RegistrationResponse, TokenResponse},
+    responses::RegistrationResponse,
     user::{ClientType, UserData, UserInfo, UserStatus},
 };
 
@@ -113,7 +113,7 @@ pub async fn user_login(
     State(state): State<Arc<HubState>>,
     jar: CookieJar,
     Json(body): Json<LoginBody>,
-) -> Result<(CookieJar, Json<TokenResponse>), StatusCode> {
+) -> Result<(CookieJar, String), StatusCode> {
     if body.validate().is_ok() {
         let LoginBody {
             username,
@@ -141,9 +141,7 @@ pub async fn user_login(
                                 RefreshToken::new(user.uuid, session.uuid, ct)
                                     .to_cookie(&state.keys),
                             ),
-                            Json(TokenResponse::new(
-                                AccessToken::new(session.uuid, user.uuid, ct).sign(&state.keys),
-                            )),
+                            AccessToken::new(session.uuid, user.uuid, ct).sign(&state.keys),
                         ))
                     }
                     UserStatus::Inactive => Err(StatusCode::IM_A_TEAPOT),
@@ -243,12 +241,11 @@ pub async fn user_password(
     }
 }
 
-// TODO: Return token as plain text
 /// Private Endpoint: Generates a new access token using the refresh token
 pub async fn token_refresh(
     State(state): State<Arc<HubState>>,
     mut jar: CookieJar,
-) -> Result<(CookieJar, Json<TokenResponse>), StatusCode> {
+) -> Result<(CookieJar, String), StatusCode> {
     if let Some(cookie) = jar.get("hub-rt") {
         if let Ok(RefreshToken { sub, jti, ct, .. }) =
             RefreshToken::decode(cookie.value(), &state.keys)
@@ -267,9 +264,7 @@ pub async fn token_refresh(
 
                 Ok((
                     jar,
-                    Json(TokenResponse::new(
-                        AccessToken::new(session.uuid, session.sub, ct).sign(&state.keys),
-                    )),
+                    AccessToken::new(session.uuid, session.sub, ct).sign(&state.keys),
                 ))
             } else {
                 Err(StatusCode::NOT_FOUND)
@@ -305,7 +300,7 @@ pub async fn token_revoke_all(
     State(state): State<Arc<HubState>>,
     jar: CookieJar,
     AccessToken { iss, sub, ct, .. }: AccessToken,
-) -> impl IntoResponse {
+) -> Result<CookieJar, StatusCode> {
     if Session::find_by_uuid(&state.db, ct, iss)
         .await
         .expect("Failed to execute query while searching for session (token/revoke_all)")
@@ -314,7 +309,7 @@ pub async fn token_revoke_all(
         macro_rules! delete_session {
             ($ct: expr) => {
                 if Session::delete_by_sub(&state.db, sub, $ct).await.is_err() {
-                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 }
             };
         }
@@ -323,21 +318,17 @@ pub async fn token_revoke_all(
         delete_session!(ClientType::Game);
         delete_session!(ClientType::Mobile);
 
-        (
-            jar.add(
-                RefreshToken::from((
-                    &Session::new(&state.db, ct, sub)
-                        .await
-                        .expect("Failed to rotate refresh token"),
-                    ct,
-                ))
-                .to_cookie(&state.keys),
-            ),
-            StatusCode::OK,
-        )
-            .into_response()
+        Ok(jar.add(
+            RefreshToken::from((
+                &Session::new(&state.db, ct, sub)
+                    .await
+                    .expect("Failed to rotate refresh token"),
+                ct,
+            ))
+            .to_cookie(&state.keys),
+        ))
     } else {
-        StatusCode::NOT_FOUND.into_response()
+        Err(StatusCode::NOT_FOUND)
     }
 }
 
