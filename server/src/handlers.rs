@@ -59,34 +59,38 @@ pub async fn pubkey(
 /// Public Endpoint: Looks up for the uuid and username of the account
 pub async fn user_info(
     State(state): State<Arc<HubState>>,
-    user_id: Query<UserIdQuery>,
+    user_id: Query<UserInfoQuery>,
 ) -> Result<Json<UserInfo>, StatusCode> {
-    Ok(Json(
-        match (user_id.uuid, &user_id.username) {
-            (Some(uuid), _) => {
-                if let Some(user) = User::find_by_uuid(&state.db, uuid)
-                    .await
-                    .expect("failed to retrieve user data from db")
-                {
-                    user
-                } else {
-                    return Err(StatusCode::NOT_FOUND);
+    if user_id.validate().is_ok() {
+        Ok(Json(
+            match (user_id.uuid, &user_id.username) {
+                (Some(uuid), _) => {
+                    if let Some(user) = User::find_by_uuid(&state.db, uuid)
+                        .await
+                        .expect("failed to retrieve user data from db")
+                    {
+                        user
+                    } else {
+                        return Err(StatusCode::NOT_FOUND);
+                    }
                 }
-            }
-            (None, Some(username)) => {
-                if let Some(user) = User::find_by_username(&state.db, username)
-                    .await
-                    .expect("failed to retrieve user data from db")
-                {
-                    user
-                } else {
-                    return Err(StatusCode::NOT_FOUND);
+                (None, Some(username)) => {
+                    if let Some(user) = User::find_by_username(&state.db, username)
+                        .await
+                        .expect("failed to retrieve user data from db")
+                    {
+                        user
+                    } else {
+                        return Err(StatusCode::NOT_FOUND);
+                    }
                 }
+                _ => return Err(StatusCode::BAD_REQUEST),
             }
-            _ => return Err(StatusCode::BAD_REQUEST),
-        }
-        .into(),
-    ))
+            .into(),
+        ))
+    } else {
+        Err(StatusCode::BAD_REQUEST)
+    }
 }
 
 /// Private Endpoint: Allows the user to retrieve their personal data

@@ -26,10 +26,10 @@ pub struct KeyFormatQuery {
     pub format: KeyFormat,
 }
 
-// TODO: Add username validation
-#[derive(Deserialize, Debug)]
-pub struct UserIdQuery {
+#[derive(Validate, Deserialize, Debug)]
+pub struct UserInfoQuery {
     pub uuid: Option<Uuid>,
+    #[validate(regex = "USERNAME_REGEX")]
     pub username: Option<String>,
 }
 
