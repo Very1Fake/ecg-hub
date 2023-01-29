@@ -101,7 +101,7 @@ impl From<User> for UserData {
             username: user.username,
             email: user.email.0,
             status: user.status,
-            created_at: user.created.unix_timestamp() as u64,
+            created_at: user.created.unix_timestamp(),
         }
     }
 }
@@ -123,10 +123,10 @@ impl From<User> for UserInfo {
 /// Represents user session
 #[derive(FromRow, Clone, Copy, Debug)]
 pub struct Session {
-    /// User UUID
-    pub sub: Uuid,
     /// Session UUID
     pub uuid: Uuid,
+    /// User UUID
+    pub sub: Uuid,
     /// Refresh Token UUID
     pub token: Uuid,
     /// Expire timestamp

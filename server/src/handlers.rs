@@ -15,8 +15,8 @@ use validator::Validate;
 
 use common::{
     hub::HubStatus,
-    responses::RegistrationResponse,
-    user::{ClientType, UserData, UserInfo, UserStatus},
+    responses::{RegistrationResponse, SessionsResponse},
+    user::{ClientType, UserData, UserInfo, UserSession, UserStatus},
 };
 
 use crate::{
@@ -240,6 +240,33 @@ pub async fn user_password(
     } else {
         StatusCode::BAD_REQUEST
     }
+}
+
+/// Private Endpoint: Allows user to retrieve list of active sessions
+pub async fn user_sessions(
+    State(state): State<Arc<HubState>>,
+    AccessToken { sub, .. }: AccessToken,
+) -> Result<Json<SessionsResponse>, StatusCode> {
+    macro_rules! find_by_sub {
+        ($ct: expr) => {
+            Session::find_by(&state.db, $ct, sub, FindBy::Sub)
+                .await
+                .expect("Failed to execute query while searching for session (user/sessions)")
+                .map(|session| UserSession {
+                    uuid: session.uuid,
+                    ct: $ct,
+                    expires_at: session.exp.unix_timestamp(),
+                    updated_at: session.updated_at.unix_timestamp(),
+                    created_at: session.created_at.unix_timestamp(),
+                })
+        };
+    }
+
+    Ok(Json(SessionsResponse {
+        web: find_by_sub!(ClientType::Web),
+        game: find_by_sub!(ClientType::Game),
+        mobile: find_by_sub!(ClientType::Mobile),
+    }))
 }
 
 /// Private Endpoint: Generates a new access token using the refresh token

@@ -8,7 +8,7 @@ pub struct UserData {
     pub username: String,
     pub email: String,
     pub status: UserStatus,
-    pub created_at: u64,
+    pub created_at: i64,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -35,4 +35,13 @@ pub enum ClientType {
     Web = 0,
     Game = 1,
     Mobile = 2,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct UserSession {
+    pub uuid: Uuid,
+    pub ct: ClientType,
+    pub expires_at: i64,
+    pub updated_at: i64,
+    pub created_at: i64,
 }
