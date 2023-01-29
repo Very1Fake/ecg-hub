@@ -23,7 +23,7 @@ use crate::{
     app::HubState,
     config::STATUS,
     models::{
-        entities::{Session, User},
+        entities::{FindBy, Session, User},
         parsers::{
             KeyFormat, KeyFormatQuery, LoginBody, PITQuery, PasswordChangeBody, RegisterBody,
             UserInfoQuery,
@@ -141,11 +141,8 @@ pub async fn user_login(
                         let session = Session::new(&state.db, ct, user.uuid).await.unwrap();
 
                         Ok((
-                            jar.add(
-                                RefreshToken::new(user.uuid, session.uuid, ct)
-                                    .to_cookie(&state.keys),
-                            ),
-                            AccessToken::new(session.uuid, user.uuid, ct).sign(&state.keys),
+                            jar.add(RefreshToken::from((&session, ct)).to_cookie(&state.keys)),
+                            AccessToken::from((&session, ct)).sign(&state.keys),
                         ))
                     }
                     UserStatus::Inactive => Err(StatusCode::IM_A_TEAPOT),
@@ -251,25 +248,22 @@ pub async fn token_refresh(
     mut jar: CookieJar,
 ) -> Result<(CookieJar, String), StatusCode> {
     if let Some(cookie) = jar.get("hub-rt") {
-        if let Ok(RefreshToken { sub, jti, ct, .. }) =
-            RefreshToken::decode(cookie.value(), &state.keys)
+        if let Ok(RefreshToken { jti, ct, .. }) = RefreshToken::decode(cookie.value(), &state.keys)
         {
             // TODO: Use better logging system
-            if let Some(mut session) = Session::find_by_uuid(&state.db, ct, jti)
+            if let Some(mut session) = Session::find_by(&state.db, ct, jti, FindBy::Token)
                 .await
                 .expect("Failed to execute query while searching for session (token/refresh)")
             {
                 if session.exp - OffsetDateTime::now_utc() < RefreshToken::ROTATION_PERIOD {
-                    session = Session::new(&state.db, ct, sub)
+                    session
+                        .refresh(&state.db, ct)
                         .await
                         .expect("Failed to refresh session");
                     jar = jar.add(RefreshToken::from((&session, ct)).to_cookie(&state.keys));
                 }
 
-                Ok((
-                    jar,
-                    AccessToken::new(session.uuid, session.sub, ct).sign(&state.keys),
-                ))
+                Ok((jar, AccessToken::from((&session, ct)).sign(&state.keys)))
             } else {
                 Err(StatusCode::NOT_FOUND)
             }
@@ -286,7 +280,7 @@ pub async fn token_revoke(
     State(state): State<Arc<HubState>>,
     AccessToken { iss, ct, .. }: AccessToken,
 ) -> StatusCode {
-    if let Some(session) = Session::find_by_uuid(&state.db, ct, iss)
+    if let Some(session) = Session::find_by(&state.db, ct, iss, FindBy::Uuid)
         .await
         .expect("Failed to execute query while searching for session (token/revoke)")
     {
@@ -305,14 +299,17 @@ pub async fn token_revoke_all(
     jar: CookieJar,
     AccessToken { iss, sub, ct, .. }: AccessToken,
 ) -> Result<CookieJar, StatusCode> {
-    if Session::find_by_uuid(&state.db, ct, iss)
+    if Session::find_by(&state.db, ct, iss, FindBy::Uuid)
         .await
         .expect("Failed to execute query while searching for session (token/revoke_all)")
         .is_some()
     {
         macro_rules! delete_session {
             ($ct: expr) => {
-                if Session::delete_by_sub(&state.db, sub, $ct).await.is_err() {
+                if Session::delete_by(&state.db, $ct, sub, FindBy::Sub)
+                    .await
+                    .is_err()
+                {
                     return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 }
             };
@@ -326,7 +323,7 @@ pub async fn token_revoke_all(
             RefreshToken::from((
                 &Session::new(&state.db, ct, sub)
                     .await
-                    .expect("Failed to rotate refresh token"),
+                    .expect("Failed to create new session"),
                 ct,
             ))
             .to_cookie(&state.keys),

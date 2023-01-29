@@ -7,7 +7,7 @@ use axum::{
 use axum_extra::extract::cookie::Cookie;
 use common::user::ClientType;
 use hyper::StatusCode;
-use jsonwebtoken::{decode, encode, get_current_timestamp, Algorithm, Header, Validation};
+use jsonwebtoken::{decode, encode, get_current_timestamp, Algorithm, Header};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use time::Duration;
 use uuid::Uuid;
@@ -22,6 +22,10 @@ where
 {
     const LIFETIME: i64;
 
+    fn new_nbf() -> i64 {
+        get_current_timestamp() as i64
+    }
+
     fn new_exp() -> i64 {
         get_current_timestamp() as i64 + Self::LIFETIME
     }
@@ -31,19 +35,23 @@ where
     }
 
     fn decode(token: &str, keys: &Keys) -> Result<Self, jsonwebtoken::errors::Error> {
-        decode(token, &keys.decoding, &Validation::new(Algorithm::EdDSA)).map(|data| data.claims)
+        decode(token, &keys.decoding, &keys.validation).map(|data| data.claims)
     }
 }
 
 /// Contains refresh token claims
 #[derive(Deserialize, Serialize, Debug)]
 pub struct RefreshToken {
+    /// Session UUID
+    pub sess: Uuid,
     /// User UUID
     pub sub: Uuid,
     /// Refresh Token UUID
     pub jti: Uuid,
     /// Expire time (UTC timestamp)
     pub exp: i64,
+    /// Not before time (UTC timestamp)
+    pub nbf: i64,
     /// Client Type
     pub ct: ClientType,
 }
@@ -53,12 +61,26 @@ impl RefreshToken {
     pub const ROTATION_PERIOD: Duration = Duration::days(7);
 
     #[inline]
-    pub const fn new_raw(sub: Uuid, jti: Uuid, exp: i64, ct: ClientType) -> Self {
-        Self { sub, jti, exp, ct }
+    pub const fn new_raw(
+        sess: Uuid,
+        sub: Uuid,
+        jti: Uuid,
+        exp: i64,
+        nbf: i64,
+        ct: ClientType,
+    ) -> Self {
+        Self {
+            sess,
+            sub,
+            jti,
+            exp,
+            nbf,
+            ct,
+        }
     }
 
-    pub fn new(sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
-        Self::new_raw(sub, jti, Self::new_exp(), ct)
+    pub fn new(sess: Uuid, sub: Uuid, jti: Uuid, ct: ClientType) -> Self {
+        Self::new_raw(sess, sub, jti, Self::new_exp(), Self::new_nbf(), ct)
     }
 
     pub fn to_cookie(&self, keys: &Keys) -> Cookie<'static> {
@@ -76,7 +98,14 @@ impl SecurityToken for RefreshToken {
 
 impl From<(&Session, ClientType)> for RefreshToken {
     fn from((session, ct): (&Session, ClientType)) -> Self {
-        Self::new_raw(session.sub, session.uuid, session.exp.unix_timestamp(), ct)
+        Self::new_raw(
+            session.uuid,
+            session.sub,
+            session.token,
+            session.exp.unix_timestamp(),
+            Self::new_nbf(),
+            ct,
+        )
     }
 }
 
@@ -110,6 +139,12 @@ impl AccessToken {
 impl SecurityToken for AccessToken {
     /// Access token lifetime: 1 minute
     const LIFETIME: i64 = 60;
+}
+
+impl From<(&Session, ClientType)> for AccessToken {
+    fn from((session, ct): (&Session, ClientType)) -> Self {
+        Self::new(session.uuid, session.sub, ct)
+    }
 }
 
 #[async_trait::async_trait]
@@ -175,7 +210,7 @@ impl PlayerIdentityToken {
             sub,
             Uuid::new_v4(),
             Self::new_exp(),
-            get_current_timestamp() as i64,
+            Self::new_nbf(),
             ct,
         )
     }

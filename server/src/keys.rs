@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use ed25519_compact::{KeyPair, Seed};
 use hex::ToHex;
-use jsonwebtoken::{DecodingKey, EncodingKey};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation};
 
 use crate::app::HubState;
 
@@ -18,11 +18,17 @@ pub struct Keys {
     // Cached values
     pub public_hex: String,
     pub public_pem: String,
+
+    pub validation: Validation,
 }
 
 impl Keys {
     pub fn new(pair: KeyPair) -> Self {
         let public_pem = pair.pk.to_pem();
+
+        let mut validation = Validation::new(Algorithm::EdDSA);
+        // Allowed time error: 1 second
+        validation.leeway = 1;
 
         Self {
             encoding: EncodingKey::from_ed_pem(pair.sk.to_pem().as_bytes()).unwrap(),
@@ -30,6 +36,7 @@ impl Keys {
             public_hex: pair.pk.as_slice().encode_hex(),
             pair,
             public_pem,
+            validation,
         }
     }
 

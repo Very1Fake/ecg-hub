@@ -14,6 +14,12 @@ use crate::{types::CiText, DB};
 
 use super::tokens::{RefreshToken, SecurityToken};
 
+pub enum FindBy {
+    Uuid,
+    Sub,
+    Token,
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // User
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,8 +127,14 @@ pub struct Session {
     pub sub: Uuid,
     /// Session UUID
     pub uuid: Uuid,
+    /// Refresh Token UUID
+    pub token: Uuid,
     /// Expire timestamp
     pub exp: OffsetDateTime,
+    /// Session refresh token last rotation timestamp
+    pub updated_at: OffsetDateTime,
+    /// Session creation timestamp
+    pub created_at: OffsetDateTime,
 }
 
 impl Session {
@@ -134,11 +146,13 @@ impl Session {
                 ClientType::Game => "GameSession",
                 ClientType::Mobile => "MobileSession",
             },
-            "\" VALUES ($1, default, $2) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, exp = excluded.exp RETURNING *;"
-        ].concat()
+            "\" (sub, exp) VALUES ($1, $2) ON CONFLICT (sub) DO UPDATE SET uuid = excluded.uuid, ",
+            "token = excluded.token, exp = excluded.exp, created_at = default RETURNING *;",
+        ]
+        .concat()
     }
 
-    fn query_delete(client_type: ClientType, by_sub: bool) -> String {
+    fn query_delete(client_type: ClientType, by: FindBy) -> String {
         [
             "DELETE FROM \"",
             match client_type {
@@ -146,14 +160,16 @@ impl Session {
                 ClientType::Game => "GameSession",
                 ClientType::Mobile => "MobileSession",
             },
-            "\" WHERE ",
-            if by_sub { "sub" } else { "uuid" },
-            " = $1;",
+            match by {
+                FindBy::Uuid => "\" WHERE uuid = $1",
+                FindBy::Sub => "\" WHERE sub = $1",
+                FindBy::Token => "\" WHERE token = $1",
+            },
         ]
         .concat()
     }
 
-    fn query_find(client_type: ClientType, by_pk: bool) -> String {
+    fn query_find(client_type: ClientType, by: FindBy) -> String {
         [
             "SELECT * FROM \"",
             match client_type {
@@ -161,11 +177,24 @@ impl Session {
                 ClientType::Game => "GameSession",
                 ClientType::Mobile => "MobileSession",
             },
-            if by_pk {
-                "\" WHERE sub = $1"
-            } else {
-                "\" WHERE uuid = $1"
+            match by {
+                FindBy::Uuid => "\" WHERE uuid = $1",
+                FindBy::Sub => "\" WHERE sub = $1",
+                FindBy::Token => "\" WHERE token = $1",
             },
+        ]
+        .concat()
+    }
+
+    fn query_refresh(client_type: ClientType) -> String {
+        [
+            "UPDATE \"",
+            match client_type {
+                ClientType::Web => "WebSession",
+                ClientType::Game => "GameSession",
+                ClientType::Mobile => "MobileSession",
+            },
+            "\" SET token = DEFAULT, exp = $1 WHERE uuid = $2 RETURNING token;",
         ]
         .concat()
     }
@@ -178,43 +207,42 @@ impl Session {
             .await
     }
 
-    pub async fn find_by_sub(
-        db: &DB,
-        client_type: ClientType,
-        sub: Uuid,
-    ) -> Result<Option<Self>, Error> {
-        sqlx::query_as(&Self::query_find(client_type, true))
-            .bind(sub)
-            .fetch_optional(db)
-            .await
-    }
-
-    pub async fn find_by_uuid(
+    pub async fn find_by(
         db: &DB,
         client_type: ClientType,
         uuid: Uuid,
+        by: FindBy,
     ) -> Result<Option<Self>, Error> {
-        sqlx::query_as(&Self::query_find(client_type, false))
+        sqlx::query_as(&Self::query_find(client_type, by))
             .bind(uuid)
             .fetch_optional(db)
             .await
     }
 
     pub async fn delete(&self, db: &DB, client_type: ClientType) -> Result<PgQueryResult, Error> {
-        sqlx::query(&Self::query_delete(client_type, false))
-            .bind(self.uuid)
+        Self::delete_by(db, client_type, self.uuid, FindBy::Uuid).await
+    }
+
+    pub async fn delete_by(
+        db: &DB,
+        client_type: ClientType,
+        uuid: Uuid,
+        by: FindBy,
+    ) -> Result<PgQueryResult, Error> {
+        sqlx::query(&Self::query_delete(client_type, by))
+            .bind(uuid)
             .execute(db)
             .await
     }
 
-    pub async fn delete_by_sub(
-        db: &DB,
-        sub: Uuid,
-        client_type: ClientType,
-    ) -> Result<PgQueryResult, Error> {
-        sqlx::query(&Self::query_delete(client_type, true))
-            .bind(sub)
-            .execute(db)
-            .await
+    pub async fn refresh(&mut self, db: &DB, client_type: ClientType) -> Result<(), Error> {
+        self.exp = OffsetDateTime::from_unix_timestamp(RefreshToken::new_exp()).unwrap();
+        self.token = sqlx::query_scalar(&Self::query_refresh(client_type))
+            .bind(self.exp)
+            .bind(self.uuid)
+            .fetch_one(db)
+            .await?;
+
+        Ok(())
     }
 }
