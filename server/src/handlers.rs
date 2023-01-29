@@ -298,7 +298,7 @@ pub async fn token_revoke_all(
     State(state): State<Arc<HubState>>,
     jar: CookieJar,
     AccessToken { iss, sub, ct, .. }: AccessToken,
-) -> Result<CookieJar, StatusCode> {
+) -> Result<(CookieJar, String), StatusCode> {
     if Session::find_by(&state.db, ct, iss, FindBy::Uuid)
         .await
         .expect("Failed to execute query while searching for session (token/revoke_all)")
@@ -319,14 +319,13 @@ pub async fn token_revoke_all(
         delete_session!(ClientType::Game);
         delete_session!(ClientType::Mobile);
 
-        Ok(jar.add(
-            RefreshToken::from((
-                &Session::new(&state.db, ct, sub)
-                    .await
-                    .expect("Failed to create new session"),
-                ct,
-            ))
-            .to_cookie(&state.keys),
+        let session = Session::new(&state.db, ct, sub)
+            .await
+            .expect("Failed to create new session");
+
+        Ok((
+            jar.add(RefreshToken::from((&session, ct)).to_cookie(&state.keys)),
+            AccessToken::from((&session, ct)).sign(&state.keys),
         ))
     } else {
         Err(StatusCode::NOT_FOUND)
