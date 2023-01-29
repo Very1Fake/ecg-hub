@@ -120,7 +120,6 @@ where
 {
     type Rejection = StatusCode;
 
-    // TODO: Return FORBIDDEN on bad key
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let TypedHeader(Authorization(bearer)) =
             TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
@@ -129,7 +128,7 @@ where
 
         let keys = Keys::from_ref(state);
 
-        Self::decode(bearer.token(), &keys).map_err(|_| StatusCode::BAD_REQUEST)
+        Self::decode(bearer.token(), &keys).map_err(|_| StatusCode::FORBIDDEN)
     }
 }
 

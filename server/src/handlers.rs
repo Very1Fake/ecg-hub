@@ -26,7 +26,7 @@ use crate::{
         entities::{Session, User},
         parsers::{
             KeyFormat, KeyFormatQuery, LoginBody, PITQuery, PasswordChangeBody, RegisterBody,
-            UserIdQuery,
+            UserInfoQuery,
         },
         tokens::{AccessToken, PlayerIdentityToken, RefreshToken, SecurityToken},
     },
@@ -274,7 +274,7 @@ pub async fn token_refresh(
                 Err(StatusCode::NOT_FOUND)
             }
         } else {
-            Err(StatusCode::BAD_REQUEST)
+            Err(StatusCode::FORBIDDEN)
         }
     } else {
         Err(StatusCode::EXPECTATION_FAILED)
